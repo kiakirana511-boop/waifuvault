@@ -3,10 +3,13 @@ import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:palette_generator/palette_generator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
+import 'package:video_thumbnail/video_thumbnail.dart';
 
 void main() {
   runApp(const WaifuVaultApp());
@@ -42,6 +45,7 @@ class VaultMedia {
   final String type; // image / video
   final String title;
   final String category;
+  final String? thumbnailPath;
   final int createdAt;
   final bool favorite;
   final int? accentColor;
@@ -52,6 +56,7 @@ class VaultMedia {
     required this.type,
     required this.title,
     required this.category,
+    this.thumbnailPath,
     required this.createdAt,
     required this.favorite,
     required this.accentColor,
@@ -66,6 +71,7 @@ class VaultMedia {
     String? type,
     String? title,
     String? category,
+    String? thumbnailPath,
     int? createdAt,
     bool? favorite,
     int? accentColor,
@@ -76,6 +82,7 @@ class VaultMedia {
       type: type ?? this.type,
       title: title ?? this.title,
       category: category ?? this.category,
+      thumbnailPath: thumbnailPath ?? this.thumbnailPath,
       createdAt: createdAt ?? this.createdAt,
       favorite: favorite ?? this.favorite,
       accentColor: accentColor ?? this.accentColor,
@@ -88,6 +95,7 @@ class VaultMedia {
         'type': type,
         'title': title,
         'category': category,
+        'thumbnailPath': thumbnailPath,
         'createdAt': createdAt,
         'favorite': favorite,
         'accentColor': accentColor,
@@ -100,6 +108,7 @@ class VaultMedia {
       type: json['type'] as String,
       title: json['title'] as String,
       category: json['category'] as String,
+      thumbnailPath: json['thumbnailPath'] as String?,
       createdAt: json['createdAt'] as int,
       favorite: json['favorite'] as bool? ?? false,
       accentColor: json['accentColor'] as int?,
@@ -160,9 +169,24 @@ class VaultStore extends ChangeNotifier {
   }
 
   Future<void> delete(String id) async {
-    _items.removeWhere((e) => e.id == id);
+    final index = _items.indexWhere((e) => e.id == id);
+    if (index == -1) return;
+    final item = _items[index];
+    _items.removeAt(index);
     notifyListeners();
+    await _deleteVaultFile(item.path);
+    if (item.thumbnailPath != null) {
+      await _deleteVaultFile(item.thumbnailPath!);
+    }
     await _save();
+  }
+
+  Future<void> _deleteVaultFile(String path) async {
+    try {
+      if (!path.contains('waifuvault_media') && !path.contains('waifuvault_thumbs')) return;
+      final file = File(path);
+      if (await file.exists()) await file.delete();
+    } catch (_) {}
   }
 
   Future<void> setPrivateMode(bool value) async {
@@ -715,13 +739,48 @@ class ProfileScreen extends StatelessWidget {
                     secondary: const Icon(Icons.lock_rounded, color: kBlue),
                   ),
                 ),
-                SettingsTile(icon: Icons.info_rounded, title: 'Tentang WaifuVault', subtitle: 'v1.0.0', trailing: Icons.chevron_right_rounded),
+                SettingsTile(icon: Icons.info_rounded, title: 'Tentang WaifuVault', subtitle: 'v1.1.0', trailing: Icons.chevron_right_rounded),
               ],
             );
           },
         ),
       ),
     );
+  }
+}
+
+
+Future<Directory> getVaultDirectory(String folderName) async {
+  final base = await getApplicationDocumentsDirectory();
+  final dir = Directory(p.join(base.path, folderName));
+  if (!await dir.exists()) {
+    await dir.create(recursive: true);
+  }
+  return dir;
+}
+
+Future<String> copyFileToVault(String originalPath, String mediaType) async {
+  final source = File(originalPath);
+  final mediaDir = await getVaultDirectory('waifuvault_media');
+  final ext = p.extension(originalPath).isEmpty ? (mediaType == 'video' ? '.mp4' : '.jpg') : p.extension(originalPath);
+  final safeExt = ext.toLowerCase();
+  final name = '${DateTime.now().microsecondsSinceEpoch}_$mediaType$safeExt';
+  final targetPath = p.join(mediaDir.path, name);
+  return (await source.copy(targetPath)).path;
+}
+
+Future<String?> makeVideoThumb(String videoPath) async {
+  try {
+    final thumbDir = await getVaultDirectory('waifuvault_thumbs');
+    return await VideoThumbnail.thumbnailFile(
+      video: videoPath,
+      thumbnailPath: thumbDir.path,
+      imageFormat: ImageFormat.JPEG,
+      maxWidth: 720,
+      quality: 82,
+    );
+  } catch (_) {
+    return null;
   }
 }
 
@@ -768,37 +827,47 @@ class _AddMediaScreenState extends State<AddMediaScreen> {
     });
   }
 
-  Future<int?> getAccent(String path, String type) async {
-    if (type != 'image') return kBlue.value;
+  Future<int?> getAccent(String path, String type, {String? thumbnailPath}) async {
+    final targetPath = type == 'video' ? thumbnailPath : path;
+    if (targetPath == null) return kBlue.value;
     try {
       final palette = await PaletteGenerator.fromImageProvider(
-        FileImage(File(path)),
+        FileImage(File(targetPath)),
         maximumColorCount: 12,
       );
       return (palette.vibrantColor ?? palette.dominantColor ?? palette.mutedColor)?.color.value;
     } catch (_) {
-      return kPurple.value;
+      return type == 'video' ? kBlue.value : kPurple.value;
     }
   }
 
   Future<void> saveMedia() async {
     if (selectedPath == null || selectedType == null || saving) return;
     setState(() => saving = true);
-    final accent = await getAccent(selectedPath!, selectedType!);
-    final media = VaultMedia(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
-      path: selectedPath!,
-      type: selectedType!,
-      title: titleController.text.trim().isEmpty ? 'Untitled' : titleController.text.trim(),
-      category: category,
-      createdAt: DateTime.now().millisecondsSinceEpoch,
-      favorite: false,
-      accentColor: accent,
-    );
-    await widget.store.add(media);
-    if (!mounted) return;
-    setState(() => saving = false);
-    Navigator.pop(context);
+    try {
+      final copiedPath = await copyFileToVault(selectedPath!, selectedType!);
+      final thumbPath = selectedType == 'video' ? await makeVideoThumb(copiedPath) : null;
+      final accent = await getAccent(copiedPath, selectedType!, thumbnailPath: thumbPath);
+      final media = VaultMedia(
+        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        path: copiedPath,
+        type: selectedType!,
+        title: titleController.text.trim().isEmpty ? 'Untitled' : titleController.text.trim(),
+        category: category,
+        thumbnailPath: thumbPath,
+        createdAt: DateTime.now().millisecondsSinceEpoch,
+        favorite: false,
+        accentColor: accent,
+      );
+      await widget.store.add(media);
+      if (!mounted) return;
+      setState(() => saving = false);
+      Navigator.pop(context);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Gagal menyimpan media. Coba pilih file lain.')));
+    }
   }
 
   @override
@@ -1044,7 +1113,12 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
       backgroundColor: kBg,
       body: Stack(
         children: [
-          Positioned.fill(child: AdaptiveMediaBackground(accent: accent)),
+          Positioned.fill(
+            child: AdaptiveMediaBackground(
+              accent: accent,
+              imagePath: widget.item.thumbnailPath != null && File(widget.item.thumbnailPath!).existsSync() ? widget.item.thumbnailPath : null,
+            ),
+          ),
           SafeArea(
             child: Column(
               children: [
@@ -1285,6 +1359,8 @@ class MediaTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final file = File(item.path);
+    final thumbFile = item.thumbnailPath == null ? null : File(item.thumbnailPath!);
+    final hasThumb = thumbFile != null && thumbFile.existsSync();
     final accent = Color(item.accentColor ?? (item.isVideo ? kBlue.value : kPink.value));
     return GestureDetector(
       onTap: () => open(context),
@@ -1301,6 +1377,8 @@ class MediaTile extends StatelessWidget {
             children: [
               if (item.isImage && file.existsSync())
                 Image.file(file, fit: BoxFit.cover)
+              else if (item.isVideo && hasThumb)
+                Image.file(thumbFile!, fit: BoxFit.cover)
               else
                 Container(
                   decoration: BoxDecoration(
@@ -1669,7 +1747,7 @@ class GradientText extends StatelessWidget {
     return ShaderMask(
       blendMode: BlendMode.srcIn,
       shaderCallback: (bounds) => const LinearGradient(colors: [Colors.white, kPurple, kPink, kBlue]).createShader(bounds),
-      child: Text(text, style: style),
+      child: Text(text, style: style.copyWith(decoration: TextDecoration.none)),
     );
   }
 }
@@ -1987,7 +2065,7 @@ Future<void> confirmDelete(BuildContext context, VaultStore store, VaultMedia it
     context: context,
     builder: (context) => AlertDialog(
       title: const Text('Hapus dari WaifuVault?'),
-      content: const Text('Item akan dihapus dari daftar aplikasi. File asli di galeri HP tidak ikut dihapus.'),
+      content: const Text('Item akan dihapus dari WaifuVault. Salinan file di folder aplikasi juga ikut dihapus.'),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal')),
         FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Hapus')),
