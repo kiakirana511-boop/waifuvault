@@ -1,28 +1,20 @@
-# WaifuVault
+# WaifuVault V2
 
-WaifuVault adalah starter APK Flutter untuk galeri anime pribadi dengan UI dark neon, dukungan gambar/video, kategori, favorit, preview media, dan adaptive accent color untuk gambar.
+WaifuVault adalah galeri anime pribadi berbasis Flutter.
 
-## Fitur V1
+## V2 upgrade
 
-- Beranda/gallery grid
-- Import foto dari galeri HP
-- Import video dari galeri HP
-- Kategori: Hoshino, Blue Archive, Video JJ, Wallpaper, Lainnya
-- Favorit
-- Preview foto dengan warna UI mengikuti warna dominan gambar
-- Preview video dengan player sederhana
-- Add media screen
-- Profile/settings screen
-- Mode privat demo PIN `1234`
+- Import foto dan video
+- Salin media ke storage aplikasi agar koleksi lebih aman
+- Thumbnail video otomatis dari frame video
+- Dynamic color preview untuk foto dan video
+- Search berdasarkan judul/kategori
+- Counter kategori real-time
+- Delete item dari koleksi + hapus salinan file app
+- UI dark neon futuristik
 
-## Build APK via GitHub Actions
+## Build APK
 
-1. Upload semua file project ini ke repo GitHub.
-2. Buka tab **Actions**.
-3. Jalankan workflow **Build WaifuVault APK**.
-4. Download artifact **WaifuVault-APK**.
-5. Ekstrak zip artifact, install `app-release.apk`.
+Upload isi folder ini ke repo GitHub, lalu buka tab Actions dan jalankan workflow `Build WaifuVault APK`.
 
-## Catatan
-
-V1 menyimpan path file dari galeri HP. Kalau file asli dihapus/dipindah, preview bisa rusak. V2 bisa dibuat supaya file dicopy ke storage app sendiri.
+APK akan muncul sebagai artifact `WaifuVault-APK`.
