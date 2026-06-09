@@ -49,6 +49,8 @@ class VaultMedia {
   final int createdAt;
   final bool favorite;
   final int? accentColor;
+  final List<int> videoAccentColors;
+  final List<String> videoFramePaths;
 
   const VaultMedia({
     required this.id,
@@ -60,6 +62,8 @@ class VaultMedia {
     required this.createdAt,
     required this.favorite,
     required this.accentColor,
+    this.videoAccentColors = const [],
+    this.videoFramePaths = const [],
   });
 
   bool get isImage => type == 'image';
@@ -75,6 +79,8 @@ class VaultMedia {
     int? createdAt,
     bool? favorite,
     int? accentColor,
+    List<int>? videoAccentColors,
+    List<String>? videoFramePaths,
   }) {
     return VaultMedia(
       id: id ?? this.id,
@@ -86,6 +92,8 @@ class VaultMedia {
       createdAt: createdAt ?? this.createdAt,
       favorite: favorite ?? this.favorite,
       accentColor: accentColor ?? this.accentColor,
+      videoAccentColors: videoAccentColors ?? this.videoAccentColors,
+      videoFramePaths: videoFramePaths ?? this.videoFramePaths,
     );
   }
 
@@ -99,6 +107,8 @@ class VaultMedia {
         'createdAt': createdAt,
         'favorite': favorite,
         'accentColor': accentColor,
+        'videoAccentColors': videoAccentColors,
+        'videoFramePaths': videoFramePaths,
       };
 
   factory VaultMedia.fromJson(Map<String, dynamic> json) {
@@ -112,6 +122,13 @@ class VaultMedia {
       createdAt: json['createdAt'] as int,
       favorite: json['favorite'] as bool? ?? false,
       accentColor: json['accentColor'] as int?,
+      videoAccentColors: (json['videoAccentColors'] as List<dynamic>? ?? const [])
+          .whereType<num>()
+          .map((e) => e.toInt())
+          .toList(),
+      videoFramePaths: (json['videoFramePaths'] as List<dynamic>? ?? const [])
+          .whereType<String>()
+          .toList(),
     );
   }
 }
@@ -177,6 +194,9 @@ class VaultStore extends ChangeNotifier {
     await _deleteVaultFile(item.path);
     if (item.thumbnailPath != null) {
       await _deleteVaultFile(item.thumbnailPath!);
+    }
+    for (final framePath in item.videoFramePaths) {
+      await _deleteVaultFile(framePath);
     }
     await _save();
   }
@@ -739,7 +759,7 @@ class ProfileScreen extends StatelessWidget {
                     secondary: const Icon(Icons.lock_rounded, color: kBlue),
                   ),
                 ),
-                SettingsTile(icon: Icons.info_rounded, title: 'Tentang WaifuVault', subtitle: 'v1.1.0', trailing: Icons.chevron_right_rounded),
+                SettingsTile(icon: Icons.info_rounded, title: 'Tentang WaifuVault', subtitle: 'v1.2.0', trailing: Icons.chevron_right_rounded),
               ],
             );
           },
@@ -769,7 +789,7 @@ Future<String> copyFileToVault(String originalPath, String mediaType) async {
   return (await source.copy(targetPath)).path;
 }
 
-Future<String?> makeVideoThumb(String videoPath) async {
+Future<String?> makeVideoThumb(String videoPath, {int timeMs = 0}) async {
   try {
     final thumbDir = await getVaultDirectory('waifuvault_thumbs');
     return await VideoThumbnail.thumbnailFile(
@@ -777,11 +797,89 @@ Future<String?> makeVideoThumb(String videoPath) async {
       thumbnailPath: thumbDir.path,
       imageFormat: ImageFormat.JPEG,
       maxWidth: 720,
+      timeMs: timeMs,
       quality: 82,
     );
   } catch (_) {
     return null;
   }
+}
+
+Future<int> accentFromImageFile(String path, {int fallback = 0xFF00E5FF}) async {
+  try {
+    final palette = await PaletteGenerator.fromImageProvider(
+      FileImage(File(path)),
+      maximumColorCount: 16,
+    );
+    return (palette.vibrantColor ?? palette.dominantColor ?? palette.mutedColor)?.color.value ?? fallback;
+  } catch (_) {
+    return fallback;
+  }
+}
+
+Future<Duration?> getVideoDurationForSampling(String videoPath) async {
+  VideoPlayerController? probe;
+  try {
+    probe = VideoPlayerController.file(File(videoPath));
+    await probe.initialize();
+    return probe.value.duration;
+  } catch (_) {
+    return null;
+  } finally {
+    await probe?.dispose();
+  }
+}
+
+class VideoDynamicData {
+  final String? thumbnailPath;
+  final List<String> framePaths;
+  final List<int> accentColors;
+
+  const VideoDynamicData({
+    required this.thumbnailPath,
+    required this.framePaths,
+    required this.accentColors,
+  });
+}
+
+Future<VideoDynamicData> makeVideoDynamicData(String videoPath) async {
+  final duration = await getVideoDurationForSampling(videoPath);
+  final totalMs = duration?.inMilliseconds ?? 0;
+  final safeTotal = totalMs <= 0 ? 12000 : totalMs;
+  final points = <int>[
+    0,
+    (safeTotal * 0.25).round(),
+    (safeTotal * 0.50).round(),
+    (safeTotal * 0.75).round(),
+    (safeTotal * 0.95).round(),
+  ];
+
+  final framePaths = <String>[];
+  final colors = <int>[];
+  final seenPaths = <String>{};
+
+  for (final rawPoint in points) {
+    final timeMs = rawPoint.clamp(0, safeTotal).toInt();
+    final framePath = await makeVideoThumb(videoPath, timeMs: timeMs);
+    if (framePath == null || !File(framePath).existsSync()) continue;
+    if (!seenPaths.add(framePath)) continue;
+    framePaths.add(framePath);
+    colors.add(await accentFromImageFile(framePath, fallback: colors.isEmpty ? kBlue.value : colors.last));
+  }
+
+  if (framePaths.isEmpty) {
+    final fallbackThumb = await makeVideoThumb(videoPath);
+    if (fallbackThumb != null && File(fallbackThumb).existsSync()) {
+      framePaths.add(fallbackThumb);
+      colors.add(await accentFromImageFile(fallbackThumb, fallback: kBlue.value));
+    }
+  }
+
+  return VideoDynamicData(
+    thumbnailPath: framePaths.isEmpty ? null : framePaths.first,
+    framePaths: framePaths,
+    accentColors: colors,
+  );
 }
 
 class AddMediaScreen extends StatefulWidget {
@@ -846,8 +944,14 @@ class _AddMediaScreenState extends State<AddMediaScreen> {
     setState(() => saving = true);
     try {
       final copiedPath = await copyFileToVault(selectedPath!, selectedType!);
-      final thumbPath = selectedType == 'video' ? await makeVideoThumb(copiedPath) : null;
-      final accent = await getAccent(copiedPath, selectedType!, thumbnailPath: thumbPath);
+      VideoDynamicData? videoData;
+      if (selectedType == 'video') {
+        videoData = await makeVideoDynamicData(copiedPath);
+      }
+      final thumbPath = videoData?.thumbnailPath;
+      final accent = selectedType == 'video' && (videoData?.accentColors.isNotEmpty ?? false)
+          ? videoData!.accentColors.first
+          : await getAccent(copiedPath, selectedType!, thumbnailPath: thumbPath);
       final media = VaultMedia(
         id: DateTime.now().microsecondsSinceEpoch.toString(),
         path: copiedPath,
@@ -858,6 +962,8 @@ class _AddMediaScreenState extends State<AddMediaScreen> {
         createdAt: DateTime.now().millisecondsSinceEpoch,
         favorite: false,
         accentColor: accent,
+        videoAccentColors: videoData?.accentColors ?? const [],
+        videoFramePaths: videoData?.framePaths ?? const [],
       );
       await widget.store.add(media);
       if (!mounted) return;
@@ -1104,10 +1210,16 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final accent = Color(widget.item.accentColor ?? kBlue.value);
     final duration = ready ? controller!.value.duration : Duration.zero;
     final position = ready ? controller!.value.position : Duration.zero;
     final progress = duration.inMilliseconds == 0 ? 0.0 : (position.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0);
+    final dynamicCount = widget.item.videoAccentColors.length;
+    final dynamicIndex = dynamicCount <= 1 ? 0 : (progress * (dynamicCount - 1)).round().clamp(0, dynamicCount - 1).toInt();
+    final accentValue = dynamicCount > 0 ? widget.item.videoAccentColors[dynamicIndex] : (widget.item.accentColor ?? kBlue.value);
+    final accent = Color(accentValue);
+    final dynamicFramePath = widget.item.videoFramePaths.length > dynamicIndex && File(widget.item.videoFramePaths[dynamicIndex]).existsSync()
+        ? widget.item.videoFramePaths[dynamicIndex]
+        : widget.item.thumbnailPath;
 
     return Scaffold(
       backgroundColor: kBg,
@@ -1116,7 +1228,7 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
           Positioned.fill(
             child: AdaptiveMediaBackground(
               accent: accent,
-              imagePath: widget.item.thumbnailPath != null && File(widget.item.thumbnailPath!).existsSync() ? widget.item.thumbnailPath : null,
+              imagePath: dynamicFramePath != null && File(dynamicFramePath).existsSync() ? dynamicFramePath : null,
             ),
           ),
           SafeArea(
@@ -1623,7 +1735,9 @@ class AdaptiveMediaBackground extends StatelessWidget {
     final imageFile = imagePath == null ? null : File(imagePath!);
     return Stack(
       children: [
-        Container(
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 650),
+          curve: Curves.easeOutCubic,
           decoration: BoxDecoration(
             gradient: RadialGradient(
               center: Alignment.topCenter,
@@ -1634,11 +1748,15 @@ class AdaptiveMediaBackground extends StatelessWidget {
         ),
         if (imageFile != null && imageFile.existsSync())
           Positioned.fill(
-            child: Opacity(
-              opacity: 0.28,
-              child: ImageFiltered(
-                imageFilter: ImageFilter.blur(sigmaX: 36, sigmaY: 36),
-                child: Image.file(imageFile, fit: BoxFit.cover),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 650),
+              child: Opacity(
+                key: ValueKey(imagePath),
+                opacity: 0.28,
+                child: ImageFiltered(
+                  imageFilter: ImageFilter.blur(sigmaX: 36, sigmaY: 36),
+                  child: Image.file(imageFile, fit: BoxFit.cover),
+                ),
               ),
             ),
           ),
