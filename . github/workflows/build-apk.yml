@@ -1,3 +1,4 @@
+# WaifuVault build workflow
 name: Build WaifuVault APK
 
 on:
