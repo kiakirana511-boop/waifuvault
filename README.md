@@ -24,3 +24,9 @@ APK akan muncul sebagai artifact `WaifuVault-APK`.
 - Adaptive video color: preview video now samples several frames and changes the glow/background color while the video plays.
 - Video preview background can switch between sampled frame blurs for a more dynamic feel.
 - Version: 1.2.0+3
+
+
+## V3.1 Hotfix
+- Fixed adaptive video colors for old videos imported before V3 by generating missing frame colors when the video preview opens.
+- Video thumbnails/frame samples are now saved as unique files so multiple sampled frames do not collapse into one thumbnail.
+- Version: 1.2.1+4
