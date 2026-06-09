@@ -30,3 +30,11 @@ APK akan muncul sebagai artifact `WaifuVault-APK`.
 - Fixed adaptive video colors for old videos imported before V3 by generating missing frame colors when the video preview opens.
 - Video thumbnails/frame samples are now saved as unique files so multiple sampled frames do not collapse into one thumbnail.
 - Version: 1.2.1+4
+
+
+## V4 Premium UI Upgrade
+- Dashboard hero premium di Beranda
+- Stat card foto/video/favorit
+- Media tile lebih rapi dengan title + category overlay
+- Bottom navigation lebih neon/glass
+- Versi app: 1.3.0+5
