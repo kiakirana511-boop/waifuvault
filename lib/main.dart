@@ -185,6 +185,21 @@ class VaultStore extends ChangeNotifier {
     await _save();
   }
 
+  Future<void> updateVideoDynamicData(String id, VideoDynamicData data) async {
+    final index = _items.indexWhere((e) => e.id == id);
+    if (index == -1 || data.accentColors.isEmpty) return;
+
+    _items[index] = _items[index].copyWith(
+      thumbnailPath: data.thumbnailPath ?? _items[index].thumbnailPath,
+      accentColor: data.accentColors.first,
+      videoAccentColors: data.accentColors,
+      videoFramePaths: data.framePaths,
+    );
+
+    notifyListeners();
+    await _save();
+  }
+
   Future<void> delete(String id) async {
     final index = _items.indexWhere((e) => e.id == id);
     if (index == -1) return;
@@ -792,14 +807,23 @@ Future<String> copyFileToVault(String originalPath, String mediaType) async {
 Future<String?> makeVideoThumb(String videoPath, {int timeMs = 0}) async {
   try {
     final thumbDir = await getVaultDirectory('waifuvault_thumbs');
-    return await VideoThumbnail.thumbnailFile(
+    final bytes = await VideoThumbnail.thumbnailData(
       video: videoPath,
-      thumbnailPath: thumbDir.path,
       imageFormat: ImageFormat.JPEG,
       maxWidth: 720,
       timeMs: timeMs,
       quality: 82,
     );
+    if (bytes == null || bytes.isEmpty) return null;
+
+    final safeBase = p.basenameWithoutExtension(videoPath).replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+    final safeTime = timeMs.clamp(0, 999999999).toInt();
+    final out = File(p.join(
+      thumbDir.path,
+      '${safeBase}_${safeTime}_${DateTime.now().microsecondsSinceEpoch}.jpg',
+    ));
+    await out.writeAsBytes(bytes, flush: true);
+    return out.path;
   } catch (_) {
     return null;
   }
@@ -1158,10 +1182,18 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
   VideoPlayerController? controller;
   bool ready = false;
   bool missing = false;
+  bool generatingDynamicColors = false;
+  late List<int> localVideoAccentColors;
+  late List<String> localVideoFramePaths;
+  String? localThumbnailPath;
 
   @override
   void initState() {
     super.initState();
+    localVideoAccentColors = List<int>.from(widget.item.videoAccentColors);
+    localVideoFramePaths = List<String>.from(widget.item.videoFramePaths);
+    localThumbnailPath = widget.item.thumbnailPath;
+
     final file = File(widget.item.path);
     if (!file.existsSync()) {
       missing = true;
@@ -1175,7 +1207,29 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
         });
         controller!.setLooping(false);
         setState(() => ready = true);
+        ensureDynamicColors();
       });
+  }
+
+  Future<void> ensureDynamicColors() async {
+    if (generatingDynamicColors || localVideoAccentColors.length > 1) return;
+    if (!File(widget.item.path).existsSync()) return;
+
+    setState(() => generatingDynamicColors = true);
+    final data = await makeVideoDynamicData(widget.item.path);
+    if (!mounted) return;
+
+    if (data.accentColors.isNotEmpty) {
+      setState(() {
+        localVideoAccentColors = data.accentColors;
+        localVideoFramePaths = data.framePaths;
+        localThumbnailPath = data.thumbnailPath ?? localThumbnailPath;
+        generatingDynamicColors = false;
+      });
+      await widget.store.updateVideoDynamicData(widget.item.id, data);
+    } else {
+      setState(() => generatingDynamicColors = false);
+    }
   }
 
   @override
@@ -1213,13 +1267,13 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
     final duration = ready ? controller!.value.duration : Duration.zero;
     final position = ready ? controller!.value.position : Duration.zero;
     final progress = duration.inMilliseconds == 0 ? 0.0 : (position.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0);
-    final dynamicCount = widget.item.videoAccentColors.length;
+    final dynamicCount = localVideoAccentColors.length;
     final dynamicIndex = dynamicCount <= 1 ? 0 : (progress * (dynamicCount - 1)).round().clamp(0, dynamicCount - 1).toInt();
-    final accentValue = dynamicCount > 0 ? widget.item.videoAccentColors[dynamicIndex] : (widget.item.accentColor ?? kBlue.value);
+    final accentValue = dynamicCount > 0 ? localVideoAccentColors[dynamicIndex] : (widget.item.accentColor ?? kBlue.value);
     final accent = Color(accentValue);
-    final dynamicFramePath = widget.item.videoFramePaths.length > dynamicIndex && File(widget.item.videoFramePaths[dynamicIndex]).existsSync()
-        ? widget.item.videoFramePaths[dynamicIndex]
-        : widget.item.thumbnailPath;
+    final dynamicFramePath = localVideoFramePaths.length > dynamicIndex && File(localVideoFramePaths[dynamicIndex]).existsSync()
+        ? localVideoFramePaths[dynamicIndex]
+        : localThumbnailPath;
 
     return Scaffold(
       backgroundColor: kBg,
@@ -1242,7 +1296,14 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
                       const Spacer(),
                       const Text('Video JJ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
                       const SizedBox(width: 8),
-                      const ProBadge(),
+                      if (generatingDynamicColors)
+                        SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: accent),
+                        )
+                      else
+                        const ProBadge(),
                       const Spacer(),
                       NeonIconButton(icon: Icons.cast_rounded, onTap: () {}),
                       const SizedBox(width: 8),
