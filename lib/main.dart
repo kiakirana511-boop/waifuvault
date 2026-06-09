@@ -264,6 +264,12 @@ class _WaifuVaultAppState extends State<WaifuVaultApp> {
       title: 'WaifuVault',
       debugShowCheckedModeBanner: false,
       themeMode: ThemeMode.dark,
+      builder: (context, child) {
+        return DefaultTextStyle.merge(
+          style: const TextStyle(decoration: TextDecoration.none),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
       darkTheme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
@@ -500,10 +506,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     padding: const EdgeInsets.fromLTRB(18, 0, 18, 110),
                     sliver: SliverGrid(
                       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 3,
-                        mainAxisSpacing: 10,
-                        crossAxisSpacing: 10,
-                        childAspectRatio: 0.75,
+                        crossAxisCount: 2,
+                        mainAxisSpacing: 14,
+                        crossAxisSpacing: 14,
+                        childAspectRatio: 0.72,
                       ),
                       delegate: SliverChildBuilderDelegate(
                         (context, i) => MediaTile(item: filteredItems[i], store: widget.store),
@@ -717,7 +723,7 @@ class CategoryDetailScreen extends StatelessWidget {
                       children: [
                         NeonIconButton(icon: Icons.arrow_back_rounded, onTap: () => Navigator.pop(context)),
                         const SizedBox(width: 14),
-                        Expanded(child: GradientText(category, style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900))),
+                        Expanded(child: GradientText(category, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900))),
                       ],
                     ),
                   ),
@@ -736,10 +742,10 @@ class CategoryDetailScreen extends StatelessWidget {
                     padding: const EdgeInsets.fromLTRB(18, 0, 18, 30),
                     sliver: SliverGrid(
                       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 3,
-                        mainAxisSpacing: 10,
-                        crossAxisSpacing: 10,
-                        childAspectRatio: 0.75,
+                        crossAxisCount: 2,
+                        mainAxisSpacing: 14,
+                        crossAxisSpacing: 14,
+                        childAspectRatio: 0.72,
                       ),
                       delegate: SliverChildBuilderDelegate((context, i) => MediaTile(item: items[i], store: store), childCount: items.length),
                     ),
@@ -794,10 +800,10 @@ class FavoritesScreen extends StatelessWidget {
                     padding: const EdgeInsets.fromLTRB(18, 0, 18, 110),
                     sliver: SliverGrid(
                       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 3,
-                        mainAxisSpacing: 10,
-                        crossAxisSpacing: 10,
-                        childAspectRatio: 0.75,
+                        crossAxisCount: 2,
+                        mainAxisSpacing: 14,
+                        crossAxisSpacing: 14,
+                        childAspectRatio: 0.72,
                       ),
                       delegate: SliverChildBuilderDelegate((context, i) => MediaTile(item: items[i], store: store), childCount: items.length),
                     ),
@@ -1720,7 +1726,7 @@ class MediaTile extends StatelessWidget {
               Positioned(
                 left: 7,
                 right: 7,
-                bottom: item.isVideo ? 34 : 8,
+                bottom: item.isVideo ? 38 : 10,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
@@ -1729,13 +1735,29 @@ class MediaTile extends StatelessWidget {
                       item.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w900, shadows: [Shadow(color: Colors.black, blurRadius: 8)]),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                        decoration: TextDecoration.none,
+                        shadows: [Shadow(color: Colors.black, blurRadius: 8)],
+                      ),
                     ),
                     const SizedBox(height: 2),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(color: accent.withOpacity(0.55), borderRadius: BorderRadius.circular(99)),
-                      child: Text(item.category, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold)),
+                      child: Text(
+                        item.category,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          decoration: TextDecoration.none,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -1752,7 +1774,7 @@ class MediaTile extends StatelessWidget {
                       children: [
                         Icon(Icons.videocam_rounded, size: 14),
                         SizedBox(width: 4),
-                        Text('Video', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                        Text('Video', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white, decoration: TextDecoration.none)),
                       ],
                     ),
                   ),
@@ -2365,9 +2387,30 @@ class EmptyState extends StatelessWidget {
               child: Icon(icon, size: 52),
             ),
             const SizedBox(height: 20),
-            Text(title, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900)),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                color: Colors.white,
+                height: 1.1,
+                decoration: TextDecoration.none,
+              ),
+            ),
             const SizedBox(height: 8),
-            Text(subtitle, textAlign: TextAlign.center, style: const TextStyle(color: kTextSoft)),
+            Text(
+              subtitle,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: kTextSoft,
+                fontSize: 14,
+                height: 1.35,
+                decoration: TextDecoration.none,
+              ),
+            ),
             if (actionLabel != null && onAction != null) ...[
               const SizedBox(height: 20),
               FilledButton.icon(onPressed: onAction, icon: const Icon(Icons.add_rounded), label: Text(actionLabel!)),
