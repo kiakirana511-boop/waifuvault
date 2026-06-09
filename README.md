@@ -32,9 +32,16 @@ APK akan muncul sebagai artifact `WaifuVault-APK`.
 - Version: 1.2.1+4
 
 
-## V4 Premium UI Upgrade
+## V4.1 Clean UI Hotfix Upgrade
 - Dashboard hero premium di Beranda
 - Stat card foto/video/favorit
 - Media tile lebih rapi dengan title + category overlay
 - Bottom navigation lebih neon/glass
 - Versi app: 1.3.0+5
+
+
+## V4.1 Clean UI Hotfix
+- Grid kategori/koleksi dibuat 2 kolom agar thumbnail tidak gepeng/kecil.
+- Text overlay card dibuat lebih bersih dan tidak ramai.
+- Empty state kategori diperbaiki agar tulisan tidak terlalu besar.
+- Semua fitur V3.1 adaptive video color tetap ada.
