@@ -477,6 +477,8 @@ class _HomeScreenState extends State<HomeScreen> {
                             ],
                           ),
                         ),
+                        const SizedBox(height: 14),
+                        PremiumDashboard(store: widget.store, items: filteredItems),
                         const SizedBox(height: 18),
                       ],
                     ),
@@ -513,6 +515,135 @@ class _HomeScreenState extends State<HomeScreen> {
             );
           },
         ),
+      ),
+    );
+  }
+}
+
+
+class PremiumDashboard extends StatelessWidget {
+  final VaultStore store;
+  final List<VaultMedia> items;
+  const PremiumDashboard({super.key, required this.store, required this.items});
+
+  @override
+  Widget build(BuildContext context) {
+    final latest = store.items.isNotEmpty ? store.items.first : null;
+    final latestImage = latest == null
+        ? null
+        : latest.isImage
+            ? File(latest.path)
+            : latest.thumbnailPath == null
+                ? null
+                : File(latest.thumbnailPath!);
+    final accent = Color(latest?.accentColor ?? kPurple.value);
+
+    return Column(
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(28),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [accent.withOpacity(0.38), kPanel.withOpacity(0.94), kBg.withOpacity(0.96)],
+            ),
+            border: Border.all(color: accent.withOpacity(0.38)),
+            boxShadow: [BoxShadow(color: accent.withOpacity(0.20), blurRadius: 26, offset: const Offset(0, 14))],
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(999),
+                            color: Colors.white.withOpacity(0.09),
+                            border: Border.all(color: Colors.white12),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.bolt_rounded, size: 16, color: kBlue),
+                              SizedBox(width: 5),
+                              Text('V4 Premium UI', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    const Text('Galeri anime pribadi dengan glow adaptif.', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 6),
+                    Text('${store.items.length} item • ${store.favoriteCount} favorit • ${store.videoCount} video', style: const TextStyle(color: kTextSoft)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 14),
+              Container(
+                width: 86,
+                height: 102,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: Colors.white24),
+                  boxShadow: [BoxShadow(color: accent.withOpacity(0.35), blurRadius: 22)],
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: latestImage != null && latestImage.existsSync()
+                    ? Image.file(latestImage, fit: BoxFit.cover)
+                    : const DecoratedBox(
+                        decoration: BoxDecoration(gradient: LinearGradient(colors: [kPurple, kPink, kBlue])),
+                        child: Icon(Icons.auto_awesome_rounded, size: 42),
+                      ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(child: DashboardStat(icon: Icons.image_rounded, label: 'Foto', value: '${store.imageCount}', color: kPink)),
+            const SizedBox(width: 10),
+            Expanded(child: DashboardStat(icon: Icons.play_circle_rounded, label: 'Video', value: '${store.videoCount}', color: kBlue)),
+            const SizedBox(width: 10),
+            Expanded(child: DashboardStat(icon: Icons.favorite_rounded, label: 'Favorit', value: '${store.favoriteCount}', color: kPurple)),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class DashboardStat extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+  const DashboardStat({super.key, required this.icon, required this.label, required this.value, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        color: Colors.white.withOpacity(0.055),
+        border: Border.all(color: color.withOpacity(0.28)),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 21),
+          const SizedBox(height: 5),
+          Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+          Text(label, style: const TextStyle(fontSize: 11, color: kTextSoft)),
+        ],
       ),
     );
   }
@@ -774,7 +905,7 @@ class ProfileScreen extends StatelessWidget {
                     secondary: const Icon(Icons.lock_rounded, color: kBlue),
                   ),
                 ),
-                SettingsTile(icon: Icons.info_rounded, title: 'Tentang WaifuVault', subtitle: 'v1.2.0', trailing: Icons.chevron_right_rounded),
+                SettingsTile(icon: Icons.info_rounded, title: 'Tentang WaifuVault', subtitle: 'v1.3.0 V4 Premium UI', trailing: Icons.chevron_right_rounded),
               ],
             );
           },
@@ -1586,6 +1717,29 @@ class MediaTile extends StatelessWidget {
                   ),
                 ),
               ),
+              Positioned(
+                left: 7,
+                right: 7,
+                bottom: item.isVideo ? 34 : 8,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      item.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w900, shadows: [Shadow(color: Colors.black, blurRadius: 8)]),
+                    ),
+                    const SizedBox(height: 2),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(color: accent.withOpacity(0.55), borderRadius: BorderRadius.circular(99)),
+                      child: Text(item.category, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+              ),
               if (item.isVideo)
                 Positioned(
                   left: 6,
@@ -1975,9 +2129,20 @@ class BottomNavButton extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: active ? kPink : kTextSoft, size: 26),
-            const SizedBox(height: 4),
-            Text(label, style: TextStyle(fontSize: 12, color: active ? kPink : kTextSoft, fontWeight: active ? FontWeight.bold : FontWeight.w500)),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: active ? const LinearGradient(colors: [kPink, kPurple]) : null,
+                color: active ? null : Colors.transparent,
+                boxShadow: active ? const [BoxShadow(color: Color(0x66FF4FB8), blurRadius: 18)] : null,
+              ),
+              child: Icon(icon, color: active ? Colors.white : kTextSoft, size: 24),
+            ),
+            const SizedBox(height: 3),
+            Text(label, style: TextStyle(fontSize: 11.5, color: active ? Colors.white : kTextSoft, fontWeight: active ? FontWeight.bold : FontWeight.w500)),
           ],
         ),
       ),
