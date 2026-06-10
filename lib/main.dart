@@ -10,6 +10,7 @@ import 'package:palette_generator/palette_generator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 void main() {
   runApp(const WaifuVaultApp());
@@ -23,6 +24,13 @@ const Color kPurple = Color(0xFF9D5CFF);
 const Color kBlue = Color(0xFF00E5FF);
 const Color kTextSoft = Color(0xFFB8B7D3);
 const String kFixedSdImportPath = '/storage/4394-15F8/DCM Waifu';
+const List<String> kFixedSdImportPathCandidates = [
+  '/storage/4394-15F8/DCM Waifu',
+  '/storage/4394-15F8/DCM Waifu/',
+  '/storage/4394-15F8/DCIM Waifu',
+  '/storage/4394-15F8/DCIM Waifu/',
+  '/storage/4394-15F8/DCM_Waifu',
+];
 
 class VaultCategory {
   final String name;
@@ -254,7 +262,7 @@ class VaultStore extends ChangeNotifier {
 
   Map<String, dynamic> backupPayload() => {
         'app': 'WaifuVault',
-        'version': '1.6.3 V7.3 Fixed SD Import',
+        'version': '1.6.4 V7.4 SD Permission Fix',
         'exportedAt': DateTime.now().toIso8601String(),
         'itemCount': _items.length,
         'items': _items.map((e) => e.toJson()).toList(),
@@ -1042,6 +1050,56 @@ class ProfileScreen extends StatelessWidget {
 }
 
 
+
+Future<bool> ensureStorageAccessForFixedSd(BuildContext context) async {
+  if (!Platform.isAndroid) return true;
+  try {
+    if (await Permission.manageExternalStorage.isGranted) return true;
+
+    // Normal media permissions help on Android 13+, but removable SD folder paths
+    // usually need All files access for Directory.list to work reliably.
+    await Permission.photos.request();
+    await Permission.videos.request();
+    await Permission.storage.request();
+
+    final status = await Permission.manageExternalStorage.request();
+    if (status.isGranted) return true;
+
+    if (!context.mounted) return false;
+    final open = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: kPanel,
+        title: const Text('Izinkan akses file'),
+        content: const Text(
+          'Android masih ngeblok scan folder SD Card langsung. Buka pengaturan aplikasi, aktifkan izin file / All files access untuk WaifuVault, lalu balik dan scan lagi.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Nanti')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Buka Settings')),
+        ],
+      ),
+    );
+    if (open == true) {
+      await openAppSettings();
+    }
+    return false;
+  } catch (_) {
+    return true;
+  }
+}
+
+Future<String?> resolveFixedSdImportPath() async {
+  for (final raw in kFixedSdImportPathCandidates) {
+    final clean = raw.endsWith('/') ? raw.substring(0, raw.length - 1) : raw;
+    final dir = Directory(clean);
+    try {
+      if (await dir.exists()) return clean;
+    } catch (_) {}
+  }
+  return null;
+}
+
 class StorageModeScreen extends StatefulWidget {
   final VaultStore store;
   const StorageModeScreen({super.key, required this.store});
@@ -1113,20 +1171,37 @@ class _StorageModeScreenState extends State<StorageModeScreen> {
 
   Future<void> importFixedSdFolder() async {
     if (busy) return;
-    const path = kFixedSdImportPath;
-    final dir = Directory(path);
-    if (!await dir.exists()) {
+
+    setState(() {
+      busy = true;
+      lastMessage = 'Cek izin storage Android...';
+    });
+
+    final allowed = await ensureStorageAccessForFixedSd(context);
+    if (!mounted) return;
+    if (!allowed) {
+      setState(() {
+        busy = false;
+        lastMessage = 'Izin file belum aktif. Aktifkan All files access lalu scan ulang.';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Aktifkan izin file dulu, lalu scan ulang.')));
+      return;
+    }
+
+    final path = await resolveFixedSdImportPath();
+    if (path == null) {
       if (!mounted) return;
       setState(() {
-        lastMessage = 'Folder SD belum ketemu: $path';
+        busy = false;
+        lastMessage = 'Folder SD belum ketemu: $kFixedSdImportPath';
       });
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Folder SD belum ketemu. Pastikan folder DCM Waifu sudah ada.')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Folder SD belum ketemu. Cek nama folder DCM Waifu.')));
       return;
     }
 
     setState(() {
       busy = true;
-      lastMessage = 'Scan folder SD tetap...';
+      lastMessage = 'Scan folder SD: $path';
     });
     await widget.store.setSdCardPath(path);
     final found = await findMediaFiles(path);
@@ -1134,9 +1209,19 @@ class _StorageModeScreenState extends State<StorageModeScreen> {
     if (!mounted) return;
     setState(() {
       busy = false;
-      lastMessage = 'SD scan selesai: ketemu ${found.length} media, $added item baru diimport.';
+      lastMessage = found.isEmpty
+          ? 'Folder kebaca, tapi 0 media didukung. Cek ekstensi file: jpg/png/webp/heic/mp4/mov/mkv.'
+          : 'SD scan selesai: ketemu ${found.length} media, $added item baru diimport.';
     });
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(added == 0 ? 'Tidak ada media baru di DCM Waifu.' : '$added media berhasil diimport dari SD.')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          found.isEmpty
+              ? 'Folder kebaca, tapi media belum terdeteksi. Cek izin/ekstensi file.'
+              : (added == 0 ? 'Media sudah pernah diimport / tidak ada item baru.' : '$added media berhasil diimport dari SD.'),
+        ),
+      ),
+    );
   }
 
   @override
@@ -1194,7 +1279,7 @@ class _StorageModeScreenState extends State<StorageModeScreen> {
                         ),
                         const SizedBox(height: 14),
                         const Text(
-                          'Mode ini paling aman buat HP: koleksi tetap kebaca walau file asli di galeri dihapus. SD Card sekarang pakai path tetap DCM Waifu biar gak rawan salah input.',
+                          'Mode ini paling aman buat HP: koleksi tetap kebaca walau file asli di galeri dihapus. SD Card pakai path tetap DCM Waifu + izin All files access biar scan lebih kuat.',
                           style: TextStyle(color: kTextSoft, height: 1.35),
                         ),
                       ],
@@ -1290,7 +1375,7 @@ class _StorageModeScreenState extends State<StorageModeScreen> {
                                 SizedBox(height: 4),
                                 Text('Path tetap: /storage/4394-15F8/DCM Waifu/', style: TextStyle(color: kTextSoft)),
                                 SizedBox(height: 4),
-                                Text('Tekan card ini buat scan & import media dari folder itu.', style: TextStyle(color: kTextSoft, fontSize: 12)),
+                                Text('Tekan card ini buat scan & import. Kalau 0, aktifkan izin file.', style: TextStyle(color: kTextSoft, fontSize: 12)),
                               ],
                             ),
                           ),
@@ -1345,7 +1430,7 @@ Future<String> copyFileToVault(String originalPath, String mediaType) async {
 
 String? mediaTypeFromPath(String filePath) {
   final ext = p.extension(filePath).toLowerCase();
-  const imageExts = {'.jpg', '.jpeg', '.png', '.webp', '.gif'};
+  const imageExts = {'.jpg', '.jpeg', '.png', '.webp', '.gif', '.heic', '.heif', '.bmp', '.avif'};
   const videoExts = {'.mp4', '.mov', '.m4v', '.3gp', '.webm', '.mkv', '.avi'};
   if (imageExts.contains(ext)) return 'image';
   if (videoExts.contains(ext)) return 'video';
@@ -2107,7 +2192,7 @@ class _SdCardPathScreenState extends State<SdCardPathScreen> {
                 padding: const EdgeInsets.all(16),
                 borderColor: kPurple.withOpacity(0.35),
                 child: const Text(
-                  'V7.3 pakai path SD tetap /storage/4394-15F8/DCM Waifu/ biar gak rawan salah input. File tetap dicopy ke internal app storage biar aman.',
+                  'V7.4 pakai path SD tetap /storage/4394-15F8/DCM Waifu/ biar gak rawan salah input. File tetap dicopy ke internal app storage biar aman.',
                   style: TextStyle(color: kTextSoft, height: 1.35),
                 ),
               ),
