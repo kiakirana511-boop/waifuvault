@@ -52,28 +52,19 @@ const List<VaultCategory> defaultCategories = [
 
 
 PageRouteBuilder<T> smoothPageRoute<T>(Widget page) {
-  // V8.9 Performance Motion: lighter transition for low-end phones.
-  // No Hero/scale-heavy snapshot on media pages, so FPS feels smoother.
+  // V8.10.1 Ultra Light Route: route/menu transition dibuat super ringan.
+  // Ini buat HP 60Hz/low-end supaya masuk-keluar Profil/Storage tidak terasa patah.
   return PageRouteBuilder<T>(
-    transitionDuration: const Duration(milliseconds: 170),
-    reverseTransitionDuration: const Duration(milliseconds: 130),
+    transitionDuration: const Duration(milliseconds: 90),
+    reverseTransitionDuration: const Duration(milliseconds: 70),
     pageBuilder: (context, animation, secondaryAnimation) => page,
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
       final curved = CurvedAnimation(
         parent: animation,
-        curve: Curves.easeOut,
+        curve: Curves.linearToEaseOut,
         reverseCurve: Curves.easeIn,
       );
-      return FadeTransition(
-        opacity: curved,
-        child: SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(0, 0.018),
-            end: Offset.zero,
-          ).animate(curved),
-          child: child,
-        ),
-      );
+      return FadeTransition(opacity: curved, child: child);
     },
   );
 }
@@ -361,7 +352,7 @@ class VaultStore extends ChangeNotifier {
 
   Map<String, dynamic> backupPayload() => {
         'app': 'WaifuVault',
-        'version': '1.8.9 V8.9 Smooth FPS',
+        'version': '1.8.10.1 V8.10.1 Ultra Light Route',
         'exportedAt': DateTime.now().toIso8601String(),
         'itemCount': _items.length,
         'items': _items.map((e) => e.toJson()).toList(),
@@ -573,36 +564,50 @@ class VaultShell extends StatefulWidget {
 
 class _VaultShellState extends State<VaultShell> {
   int index = 0;
+  late final PageController _pageController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController(initialPage: index);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
 
   void openAddMedia() {
     Navigator.push(context, smoothPageRoute(AddMediaScreen(store: widget.store)));
   }
 
+  void _goToTab(int newIndex) {
+    if (newIndex == index) return;
+    setState(() => index = newIndex);
+    _pageController.animateToPage(
+      newIndex,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final pages = [
-      HomeScreen(store: widget.store),
-      CategoryScreen(store: widget.store),
-      FavoritesScreen(store: widget.store),
-      ProfileScreen(store: widget.store),
+      RepaintBoundary(child: HomeScreen(store: widget.store)),
+      RepaintBoundary(child: CategoryScreen(store: widget.store)),
+      RepaintBoundary(child: FavoritesScreen(store: widget.store)),
+      RepaintBoundary(child: ProfileScreen(store: widget.store)),
     ];
 
     return Scaffold(
       extendBody: true,
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 150),
-        switchInCurve: Curves.easeOut,
-        switchOutCurve: Curves.easeIn,
-        transitionBuilder: (child, animation) {
-          return FadeTransition(
-            opacity: animation,
-            child: child,
-          );
-        },
-        child: KeyedSubtree(
-          key: ValueKey<int>(index),
-          child: pages[index],
-        ),
+      body: PageView(
+        controller: _pageController,
+        physics: const NeverScrollableScrollPhysics(),
+        allowImplicitScrolling: true,
+        children: pages,
       ),
       bottomNavigationBar: Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -627,25 +632,25 @@ class _VaultShellState extends State<VaultShell> {
                     label: 'Beranda',
                     icon: Icons.home_rounded,
                     active: index == 0,
-                    onTap: () => setState(() => index = 0),
+                    onTap: () => _goToTab(0),
                   ),
                   BottomNavButton(
                     label: 'Kategori',
                     icon: Icons.grid_view_rounded,
                     active: index == 1,
-                    onTap: () => setState(() => index = 1),
+                    onTap: () => _goToTab(1),
                   ),
                   BottomNavButton(
                     label: 'Koleksi',
                     icon: Icons.favorite_border_rounded,
                     active: index == 2,
-                    onTap: () => setState(() => index = 2),
+                    onTap: () => _goToTab(2),
                   ),
                   BottomNavButton(
                     label: 'Profil',
                     icon: Icons.person_rounded,
                     active: index == 3,
-                    onTap: () => setState(() => index = 3),
+                    onTap: () => _goToTab(3),
                   ),
                 ],
               ),
@@ -992,7 +997,7 @@ class PremiumDashboard extends StatelessWidget {
                             children: [
                               Icon(Icons.bolt_rounded, size: 16, color: kBlue),
                               SizedBox(width: 5),
-                              Text('V8.9 Smooth FPS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900)),
+                              Text('V8.10.1 Ultra Light', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900)),
                             ],
                           ),
                         ),
@@ -1306,7 +1311,7 @@ class ProfileScreen extends StatelessWidget {
                 SettingsTile(icon: Icons.storage_rounded, title: 'Storage Mode', subtitle: 'Internal / SD public path + backup JSON', trailing: Icons.chevron_right_rounded, onTap: () => Navigator.push(context, smoothPageRoute(StorageModeScreen(store: store)))),
                 SettingsTile(icon: Icons.cloud_upload_rounded, title: 'Backup & Ekspor', subtitle: 'Buat file backup koleksi', trailing: Icons.chevron_right_rounded, onTap: () => Navigator.push(context, smoothPageRoute(StorageModeScreen(store: store)))),
                 SettingsTile(icon: Icons.lock_rounded, title: 'Mode Privat', subtitle: 'Dilewati dulu; bisa lanjut V6 nanti', trailing: Icons.lock_outline_rounded),
-                SettingsTile(icon: Icons.info_rounded, title: 'Tentang WaifuVault', subtitle: 'v1.8.9 V8.9 Smooth FPS', trailing: Icons.chevron_right_rounded),
+                SettingsTile(icon: Icons.info_rounded, title: 'Tentang WaifuVault', subtitle: 'v1.8.10+28 V8.10.1 Ultra Light', trailing: Icons.chevron_right_rounded),
               ],
             );
           },
@@ -1587,7 +1592,7 @@ class _StorageModeScreenState extends State<StorageModeScreen> {
                         ),
                         const SizedBox(height: 14),
                         const Text(
-                          'V8.9 Smooth FPS: transisi dibuat lebih ringan, FPS lebih stabil di HP, card media lebih clean, nama file panjang otomatis dirapikan jadi Foto Baru / Video Baru.',
+                          'V8.10 Smooth Tab: transisi dibuat lebih ringan, FPS lebih stabil di HP, card media lebih clean, nama file panjang otomatis dirapikan jadi Foto Baru / Video Baru.',
                           style: TextStyle(color: kTextSoft, height: 1.35),
                         ),
                       ],
@@ -2562,7 +2567,7 @@ class _SdCardPathScreenState extends State<SdCardPathScreen> {
                 padding: const EdgeInsets.all(16),
                 borderColor: kPurple.withOpacity(0.35),
                 child: const Text(
-                  'V8.9: motion lebih ringan dan stabil, card tetap clean, auto-scan DCM Waifu tetap jalan.',
+                  'V8.10.1: transisi menu Profil/Storage dibuat ultra ringan, tab tetap smooth, auto-scan DCM Waifu tetap jalan.',
                   style: TextStyle(color: kTextSoft, height: 1.35),
                 ),
               ),
@@ -2833,7 +2838,7 @@ class AnimatedMediaEntry extends StatelessWidget {
   Widget build(BuildContext context) {
     return TweenAnimationBuilder<double>(
       tween: Tween<double>(begin: 0, end: 1),
-      duration: const Duration(milliseconds: 260),
+      duration: const Duration(milliseconds: 220),
       curve: Curves.easeOutCubic,
       builder: (context, value, child) {
         return Opacity(
