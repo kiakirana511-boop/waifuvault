@@ -1,6 +1,6 @@
-# WaifuVault V7.4 Fixed SD Import
+# WaifuVault V7.4.1 Fixed SD Import
 
-WaifuVault V7.4 skips V6 private mode and focuses on fixed SD import plus UI polish.
+WaifuVault V7.4.1 skips V6 private mode and focuses on fixed SD import plus UI polish.
 
 ## V7 Upgrade
 
@@ -44,7 +44,7 @@ Version: 1.6.2+10
 - Duplikat dari source path yang sama akan dilewati.
 
 
-## V7.4 Fixed SD Import
+## V7.4.1 Fixed SD Import
 
 - SD Card path is fixed to `/storage/4394-15F8/DCM Waifu/`.
 - Removed the need to type/select SD path from the main Storage Mode flow.
@@ -53,7 +53,7 @@ Version: 1.6.2+10
 - Version: 1.6.4+11.
 
 
-## V7.4 SD Permission Fix
+## V7.4.1 SD Permission Fix
 - Adds Android storage/all-files permissions in the generated manifest.
 - Requests storage access before scanning fixed SD Card folder.
 - Keeps fixed path import: /storage/4394-15F8/DCM Waifu/.
