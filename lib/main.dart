@@ -50,6 +50,35 @@ const List<VaultCategory> defaultCategories = [
   VaultCategory('Lainnya', Icons.grid_view_rounded, [Color(0xFF5C6CFF), Color(0xFF2BE7FF)]),
 ];
 
+
+PageRouteBuilder<T> smoothPageRoute<T>(Widget page) {
+  return PageRouteBuilder<T>(
+    transitionDuration: const Duration(milliseconds: 240),
+    reverseTransitionDuration: const Duration(milliseconds: 190),
+    pageBuilder: (context, animation, secondaryAnimation) => page,
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      );
+      return FadeTransition(
+        opacity: curved,
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0.03, 0.025),
+            end: Offset.zero,
+          ).animate(curved),
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.985, end: 1.0).animate(curved),
+            child: child,
+          ),
+        ),
+      );
+    },
+  );
+}
+
 class VaultMedia {
   final String id;
   final String path;
@@ -184,7 +213,7 @@ class VaultStore extends ChangeNotifier {
     loaded = true;
     notifyListeners();
 
-    // V8.5.3: auto-scan folder publik setelah app kebuka.
+    // V8.6: auto-scan folder publik setelah app kebuka.
     // Jadi file yang ditaruh manual di DCM Waifu bisa muncul tanpa import picker.
     Future.microtask(() async {
       await scanManagedFolders(silent: true);
@@ -318,7 +347,7 @@ class VaultStore extends ChangeNotifier {
 
   Map<String, dynamic> backupPayload() => {
         'app': 'WaifuVault',
-        'version': '1.7.8 V8.5.3 Clean Home Menu',
+        'version': '1.8.0 V8.7 Smooth Motion',
         'exportedAt': DateTime.now().toIso8601String(),
         'itemCount': _items.length,
         'items': _items.map((e) => e.toJson()).toList(),
@@ -379,7 +408,7 @@ class VaultStore extends ChangeNotifier {
   }
 
   Future<int> importFromFolder(String folderPath, {String category = 'Lainnya', bool silent = false}) async {
-    // V8.5.3: Dual Folder Auto Scan.
+    // V8.6: Dual Folder Auto Scan + startup permission scan.
     // Media dari SD Card tetap di SD Card sebagai path utama, tanpa copy ke internal.
     // Media dari picker biasa dicopy ke folder publik internal: /storage/emulated/0/DCM Waifu/.
     // Saat item SD dihapus dari WaifuVault, file asli di folder SD ikut dihapus.
@@ -532,10 +561,7 @@ class _VaultShellState extends State<VaultShell> {
   int index = 0;
 
   void openAddMedia() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => AddMediaScreen(store: widget.store)),
-    );
+    Navigator.push(context, smoothPageRoute(AddMediaScreen(store: widget.store)));
   }
 
   @override
@@ -549,7 +575,25 @@ class _VaultShellState extends State<VaultShell> {
 
     return Scaffold(
       extendBody: true,
-      body: pages[index],
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 230),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        transitionBuilder: (child, animation) {
+          final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+          return FadeTransition(
+            opacity: curved,
+            child: SlideTransition(
+              position: Tween<Offset>(begin: const Offset(0.025, 0), end: Offset.zero).animate(curved),
+              child: child,
+            ),
+          );
+        },
+        child: KeyedSubtree(
+          key: ValueKey<int>(index),
+          child: pages[index],
+        ),
+      ),
       bottomNavigationBar: Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         child: ClipRRect(
@@ -616,7 +660,31 @@ class _HomeScreenState extends State<HomeScreen> {
   String search = '';
   String sortMode = 'newest';
   bool selectionMode = false;
+  bool startupScanDone = false;
   final Set<String> selectedIds = <String>{};
+
+  @override
+  void initState() {
+    super.initState();
+    // V8.6: auto-scan beneran setelah Home kebuka, pakai context biar izin SD bisa diminta.
+    WidgetsBinding.instance.addPostFrameCallback((_) => runStartupFolderScan());
+  }
+
+  Future<void> runStartupFolderScan() async {
+    if (startupScanDone || !mounted) return;
+    startupScanDone = true;
+    // Tunggu store selesai load + UI kebentuk dulu.
+    await Future<void>.delayed(const Duration(milliseconds: 900));
+    if (!mounted) return;
+    final allowed = await ensureStorageAccessForFixedSd(context);
+    if (!mounted || !allowed) return;
+    final result = await widget.store.scanManagedFolders(silent: true);
+    if (!mounted) return;
+    final added = result.internalAdded + result.sdAdded;
+    if (added > 0) {
+      showSnack(context, '$added media otomatis masuk dari DCM Waifu.');
+    }
+  }
 
   List<VaultMedia> get filteredItems {
     var list = widget.store.items;
@@ -698,6 +766,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void showHomeMenu() {
     showModalBottomSheet<void>(
       context: context,
+      useSafeArea: true,
       backgroundColor: kPanel,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(26))),
       builder: (sheetContext) => Padding(
@@ -714,7 +783,7 @@ class _HomeScreenState extends State<HomeScreen> {
               subtitle: const Text('Pilih foto/video dari galeri', style: TextStyle(color: kTextSoft)),
               onTap: () {
                 Navigator.pop(sheetContext);
-                Navigator.push(context, MaterialPageRoute(builder: (_) => AddMediaScreen(store: widget.store)));
+                Navigator.push(context, smoothPageRoute(AddMediaScreen(store: widget.store)));
               },
             ),
             ListTile(
@@ -835,13 +904,16 @@ class _HomeScreenState extends State<HomeScreen> {
                       delegate: SliverChildBuilderDelegate(
                         (context, i) {
                           final item = filteredItems[i];
-                          return MediaTile(
-                            item: item,
-                            store: widget.store,
-                            selectionMode: selectionMode,
-                            selected: selectedIds.contains(item.id),
-                            onSelectedTap: () => toggleSelect(item.id),
-                            onLongPress: () => startSelect(item.id),
+                          return AnimatedMediaEntry(
+                            index: i,
+                            child: MediaTile(
+                              item: item,
+                              store: widget.store,
+                              selectionMode: selectionMode,
+                              selected: selectedIds.contains(item.id),
+                              onSelectedTap: () => toggleSelect(item.id),
+                              onLongPress: () => startSelect(item.id),
+                            ),
                           );
                         },
                         childCount: filteredItems.length,
@@ -910,7 +982,7 @@ class PremiumDashboard extends StatelessWidget {
                             children: [
                               Icon(Icons.bolt_rounded, size: 16, color: kBlue),
                               SizedBox(width: 5),
-                              Text('V8.5 Clean Home', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900)),
+                              Text('V8.7 Smooth Motion', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900)),
                             ],
                           ),
                         ),
@@ -1017,10 +1089,7 @@ class CategoryScreen extends StatelessWidget {
                     category: cat,
                     count: store.countFor(cat.name),
                     onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => CategoryDetailScreen(store: store, category: cat.name)),
-                      );
+                      Navigator.push(context, smoothPageRoute(CategoryDetailScreen(store: store, category: cat.name)));
                     },
                   ),
               ],
@@ -1078,7 +1147,7 @@ class CategoryDetailScreen extends StatelessWidget {
                         crossAxisSpacing: 14,
                         childAspectRatio: 0.72,
                       ),
-                      delegate: SliverChildBuilderDelegate((context, i) => MediaTile(item: items[i], store: store), childCount: items.length),
+                      delegate: SliverChildBuilderDelegate((context, i) => AnimatedMediaEntry(index: i, child: MediaTile(item: items[i], store: store)), childCount: items.length),
                     ),
                   ),
               ],
@@ -1136,7 +1205,7 @@ class FavoritesScreen extends StatelessWidget {
                         crossAxisSpacing: 14,
                         childAspectRatio: 0.72,
                       ),
-                      delegate: SliverChildBuilderDelegate((context, i) => MediaTile(item: items[i], store: store), childCount: items.length),
+                      delegate: SliverChildBuilderDelegate((context, i) => AnimatedMediaEntry(index: i, child: MediaTile(item: items[i], store: store)), childCount: items.length),
                     ),
                   ),
               ],
@@ -1157,10 +1226,7 @@ class ProfileScreen extends StatelessWidget {
       await store.setPrivateMode(false);
       return;
     }
-    final ok = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(builder: (_) => const PrivatePinScreen()),
-    );
+    final ok = await Navigator.push<bool>(context, smoothPageRoute<bool>(const PrivatePinScreen()));
     if (ok == true) {
       await store.setPrivateMode(true);
     }
@@ -1227,10 +1293,10 @@ class ProfileScreen extends StatelessWidget {
                 const SizedBox(height: 16),
                 SettingsTile(icon: Icons.palette_rounded, title: 'Tema', subtitle: 'Adaptive Dynamic', trailing: Icons.chevron_right_rounded),
                 SettingsTile(icon: Icons.language_rounded, title: 'Bahasa', subtitle: 'Indonesia', trailing: Icons.chevron_right_rounded),
-                SettingsTile(icon: Icons.storage_rounded, title: 'Storage Mode', subtitle: 'Internal / SD public path + backup JSON', trailing: Icons.chevron_right_rounded, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => StorageModeScreen(store: store)))),
-                SettingsTile(icon: Icons.cloud_upload_rounded, title: 'Backup & Ekspor', subtitle: 'Buat file backup koleksi', trailing: Icons.chevron_right_rounded, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => StorageModeScreen(store: store)))),
+                SettingsTile(icon: Icons.storage_rounded, title: 'Storage Mode', subtitle: 'Internal / SD public path + backup JSON', trailing: Icons.chevron_right_rounded, onTap: () => Navigator.push(context, smoothPageRoute(StorageModeScreen(store: store)))),
+                SettingsTile(icon: Icons.cloud_upload_rounded, title: 'Backup & Ekspor', subtitle: 'Buat file backup koleksi', trailing: Icons.chevron_right_rounded, onTap: () => Navigator.push(context, smoothPageRoute(StorageModeScreen(store: store)))),
                 SettingsTile(icon: Icons.lock_rounded, title: 'Mode Privat', subtitle: 'Dilewati dulu; bisa lanjut V6 nanti', trailing: Icons.lock_outline_rounded),
-                SettingsTile(icon: Icons.info_rounded, title: 'Tentang WaifuVault', subtitle: 'v1.7.8 V8.5.3 Clean Home Menu', trailing: Icons.chevron_right_rounded),
+                SettingsTile(icon: Icons.info_rounded, title: 'Tentang WaifuVault', subtitle: 'v1.8.0 V8.7 Smooth Motion', trailing: Icons.chevron_right_rounded),
               ],
             );
           },
@@ -1511,7 +1577,7 @@ class _StorageModeScreenState extends State<StorageModeScreen> {
                         ),
                         const SizedBox(height: 14),
                         const Text(
-                          'V8.5.3 tetap bisa baca dua jalur publik: Internal /storage/emulated/0/DCM Waifu/ dan SD /storage/4394-15F8/DCM Waifu/. File manual di folder itu bisa masuk koleksi tanpa import picker.',
+                          'V8.7 tambah smooth motion: pindah tab fade/slide, buka foto/video lebih halus, menu titik tiga naik smooth, dan auto-scan DCM Waifu tetap jalan.',
                           style: TextStyle(color: kTextSoft, height: 1.35),
                         ),
                       ],
@@ -1670,7 +1736,7 @@ class _StorageModeScreenState extends State<StorageModeScreen> {
 
 
 Future<Directory> getVaultDirectory(String folderName) async {
-  // V8.5.3: jangan simpan media utama di folder private /data/user/0.
+  // V8.6: jangan simpan media utama di folder private /data/user/0.
   // Import biasa masuk folder publik internal, namanya disamain dengan folder SD: DCM Waifu.
   Directory dir;
   if (folderName == 'waifuvault_media') {
@@ -2480,7 +2546,7 @@ class _SdCardPathScreenState extends State<SdCardPathScreen> {
                 padding: const EdgeInsets.all(16),
                 borderColor: kPurple.withOpacity(0.35),
                 child: const Text(
-                  'V8.5.3: import biasa masuk /storage/emulated/0/DCM Waifu/, SD tetap /storage/4394-15F8/DCM Waifu/. Delete ikut hapus file utama.',
+                  'V8.7: auto-scan folder DCM Waifu tetap jalan, ditambah transisi smooth ringan biar app gak kaku.',
                   style: TextStyle(color: kTextSoft, height: 1.35),
                 ),
               ),
@@ -2741,6 +2807,35 @@ class SelectionToolbar extends StatelessWidget {
   }
 }
 
+
+class AnimatedMediaEntry extends StatelessWidget {
+  final int index;
+  final Widget child;
+  const AnimatedMediaEntry({super.key, required this.index, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) {
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, 18 * (1 - value)),
+            child: Transform.scale(
+              scale: 0.97 + (0.03 * value),
+              child: child,
+            ),
+          ),
+        );
+      },
+      child: child,
+    );
+  }
+}
+
 class MediaTile extends StatelessWidget {
   final VaultMedia item;
   final VaultStore store;
@@ -2760,9 +2855,9 @@ class MediaTile extends StatelessWidget {
 
   void open(BuildContext context) {
     if (item.isImage) {
-      Navigator.push(context, MaterialPageRoute(builder: (_) => ImagePreviewScreen(item: item, store: store)));
+      Navigator.push(context, smoothPageRoute(ImagePreviewScreen(item: item, store: store)));
     } else {
-      Navigator.push(context, MaterialPageRoute(builder: (_) => VideoPreviewScreen(item: item, store: store)));
+      Navigator.push(context, smoothPageRoute(VideoPreviewScreen(item: item, store: store)));
     }
   }
 
@@ -3580,6 +3675,7 @@ void showSnack(BuildContext context, String message) {
 void showPreviewModeSheet(BuildContext context) {
   showModalBottomSheet(
     context: context,
+    useSafeArea: true,
     backgroundColor: kPanel,
     shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(26))),
     builder: (context) => Padding(
@@ -3607,6 +3703,7 @@ void showPreviewModeSheet(BuildContext context) {
 void showMediaOptionsSheet(BuildContext context, VaultStore store, VaultMedia item, {Future<void> Function()? onRefreshVideoColors}) {
   showModalBottomSheet(
     context: context,
+    useSafeArea: true,
     backgroundColor: kPanel,
     shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(26))),
     builder: (sheetContext) => Padding(
