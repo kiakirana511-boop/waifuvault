@@ -24,6 +24,8 @@ const Color kPurple = Color(0xFF9D5CFF);
 const Color kBlue = Color(0xFF00E5FF);
 const Color kTextSoft = Color(0xFFB8B7D3);
 const String kFixedSdImportPath = '/storage/4394-15F8/DCM Waifu';
+const String kPublicInternalVaultPath = '/storage/emulated/0/DCM Waifu';
+const String kPublicInternalCachePath = '/storage/emulated/0/DCM Waifu/.waifuvault_cache';
 const List<String> kFixedSdImportPathCandidates = [
   '/storage/4394-15F8/DCM Waifu',
   '/storage/4394-15F8/DCM Waifu/',
@@ -181,6 +183,32 @@ class VaultStore extends ChangeNotifier {
     sdCardPath = prefs.getString(_sdPathKey) ?? kFixedSdImportPath;
     loaded = true;
     notifyListeners();
+
+    // V8.5: auto-scan folder publik setelah app kebuka.
+    // Jadi file yang ditaruh manual di DCM Waifu bisa muncul tanpa import picker.
+    Future.microtask(() async {
+      await scanManagedFolders(silent: true);
+    });
+  }
+
+  Future<({int internalAdded, int sdAdded})> scanManagedFolders({bool silent = false}) async {
+    int internalAdded = 0;
+    int sdAdded = 0;
+    try {
+      internalAdded = await importFromFolder(kPublicInternalVaultPath, category: 'Lainnya', silent: silent);
+    } catch (_) {}
+    try {
+      final path = await resolveFixedSdImportPath();
+      if (path != null) {
+        sdCardPath = path;
+        sdAdded = await importFromFolder(path, category: 'Lainnya', silent: silent);
+      }
+    } catch (_) {}
+    if (!silent) {
+      notifyListeners();
+      await _save();
+    }
+    return (internalAdded: internalAdded, sdAdded: sdAdded);
   }
 
   Future<void> _save() async {
@@ -267,7 +295,9 @@ class VaultStore extends ChangeNotifier {
 
   Future<void> _deleteVaultFile(String path) async {
     try {
-      if (!path.contains('waifuvault_media') && !path.contains('waifuvault_thumbs')) return;
+      final isInternalVaultFile = isManagedInternalMediaPath(path) || isManagedInternalCachePath(path);
+      final isSdPrimaryFile = isManagedSdMediaPath(path);
+      if (!isInternalVaultFile && !isSdPrimaryFile) return;
       final file = File(path);
       if (await file.exists()) await file.delete();
     } catch (_) {}
@@ -288,7 +318,7 @@ class VaultStore extends ChangeNotifier {
 
   Map<String, dynamic> backupPayload() => {
         'app': 'WaifuVault',
-        'version': '1.7.0 V8 Advanced Gallery',
+        'version': '1.7.5 V8.5 Clean Home Menu',
         'exportedAt': DateTime.now().toIso8601String(),
         'itemCount': _items.length,
         'items': _items.map((e) => e.toJson()).toList(),
@@ -309,9 +339,9 @@ class VaultStore extends ChangeNotifier {
   int get copiedFileCount {
     int count = 0;
     for (final item in _items) {
-      if (item.path.contains('waifuvault_media')) count++;
-      if ((item.thumbnailPath ?? '').contains('waifuvault_thumbs')) count++;
-      count += item.videoFramePaths.where((e) => e.contains('waifuvault_thumbs')).length;
+      if (isManagedInternalMediaPath(item.path)) count++;
+      if (isManagedInternalCachePath(item.thumbnailPath ?? '')) count++;
+      count += item.videoFramePaths.where(isManagedInternalCachePath).length;
     }
     return count;
   }
@@ -348,28 +378,32 @@ class VaultStore extends ChangeNotifier {
     return removed;
   }
 
-  Future<int> importFromFolder(String folderPath, {String category = 'Lainnya'}) async {
+  Future<int> importFromFolder(String folderPath, {String category = 'Lainnya', bool silent = false}) async {
+    // V8.5: Dual Folder Auto Scan.
+    // Media dari SD Card tetap di SD Card sebagai path utama, tanpa copy ke internal.
+    // Media dari picker biasa dicopy ke folder publik internal: /storage/emulated/0/DCM Waifu/.
+    // Saat item SD dihapus dari WaifuVault, file asli di folder SD ikut dihapus.
     final files = await findMediaFiles(folderPath);
     var added = 0;
     for (final file in files) {
       final originalPath = file.path;
-      if (_items.any((e) => e.sourcePath == originalPath)) continue;
+      if (_items.any((e) => e.sourcePath == originalPath || e.path == originalPath)) continue;
       final type = mediaTypeFromPath(originalPath);
       if (type == null) continue;
       try {
-        final copiedPath = await copyFileToVault(originalPath, type);
+        final linkedPath = originalPath;
         VideoDynamicData? videoData;
         if (type == 'video') {
-          videoData = await makeVideoDynamicData(copiedPath);
+          videoData = await makeVideoDynamicData(linkedPath);
         }
         final thumbPath = videoData?.thumbnailPath;
         final accent = type == 'video' && (videoData?.accentColors.isNotEmpty ?? false)
             ? videoData!.accentColors.first
-            : await accentFromImageFile(type == 'video' ? (thumbPath ?? copiedPath) : copiedPath, fallback: type == 'video' ? kBlue.value : kPurple.value);
+            : await accentFromImageFile(type == 'video' ? (thumbPath ?? linkedPath) : linkedPath, fallback: type == 'video' ? kBlue.value : kPurple.value);
         _items.add(
           VaultMedia(
             id: DateTime.now().microsecondsSinceEpoch.toString(),
-            path: copiedPath,
+            path: linkedPath,
             type: type,
             title: titleFromFile(originalPath, type),
             category: type == 'video' ? 'Video JJ' : category,
@@ -386,8 +420,9 @@ class VaultStore extends ChangeNotifier {
       } catch (_) {}
     }
     if (added > 0) {
-      notifyListeners();
+      if (!silent) notifyListeners();
       await _save();
+      if (silent) notifyListeners();
     }
     return added;
   }
@@ -515,15 +550,6 @@ class _VaultShellState extends State<VaultShell> {
     return Scaffold(
       extendBody: true,
       body: pages[index],
-      floatingActionButton: FloatingActionButton.large(
-        heroTag: 'add-media',
-        onPressed: openAddMedia,
-        backgroundColor: kPink,
-        foregroundColor: Colors.white,
-        elevation: 16,
-        child: const Icon(Icons.add_rounded, size: 36),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         child: ClipRRect(
@@ -555,7 +581,6 @@ class _VaultShellState extends State<VaultShell> {
                     active: index == 1,
                     onTap: () => setState(() => index = 1),
                   ),
-                  const SizedBox(width: 64),
                   BottomNavButton(
                     label: 'Koleksi',
                     icon: Icons.favorite_border_rounded,
@@ -683,7 +708,14 @@ class _HomeScreenState extends State<HomeScreen> {
                                   style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w900),
                                 ),
                               ),
-                              const Positioned(right: 0, top: 6, child: ProBadge()),
+                              Positioned(
+                                right: 0,
+                                top: 6,
+                                child: NeonIconButton(
+                                  icon: Icons.more_vert_rounded,
+                                  onTap: () => showHomeActionsSheet(context, widget.store),
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -741,12 +773,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 if (filteredItems.isEmpty)
                   SliverFillRemaining(
                     hasScrollBody: false,
-                    child: EmptyState(
+                    child: const EmptyState(
                       title: 'Belum ada media',
-                      subtitle: 'Tekan tombol + untuk menambahkan foto atau video ke WaifuVault.',
+                      subtitle: '',
                       icon: Icons.add_photo_alternate_rounded,
-                      actionLabel: 'Tambah Media',
-                      onAction: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AddMediaScreen(store: widget.store))),
                     ),
                   )
                 else
@@ -837,7 +867,7 @@ class PremiumDashboard extends StatelessWidget {
                             children: [
                               Icon(Icons.bolt_rounded, size: 16, color: kBlue),
                               SizedBox(width: 5),
-                              Text('V8 Advanced Gallery', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900)),
+                              Text('V8.5 Clean Home', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900)),
                             ],
                           ),
                         ),
@@ -933,7 +963,7 @@ class CategoryScreen extends StatelessWidget {
                     const SizedBox(width: 8),
                     GradientText('Kategori', style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w900)),
                     const Spacer(),
-                    const ProBadge(),
+                    const SizedBox.shrink(),
                   ],
                 ),
                 const SizedBox(height: 6),
@@ -1131,7 +1161,7 @@ class ProfileScreen extends StatelessWidget {
                               ],
                             ),
                           ),
-                          const ProBadge(),
+                          const SizedBox.shrink(),
                         ],
                       ),
                       const SizedBox(height: 20),
@@ -1154,10 +1184,10 @@ class ProfileScreen extends StatelessWidget {
                 const SizedBox(height: 16),
                 SettingsTile(icon: Icons.palette_rounded, title: 'Tema', subtitle: 'Adaptive Dynamic', trailing: Icons.chevron_right_rounded),
                 SettingsTile(icon: Icons.language_rounded, title: 'Bahasa', subtitle: 'Indonesia', trailing: Icons.chevron_right_rounded),
-                SettingsTile(icon: Icons.storage_rounded, title: 'Storage Mode', subtitle: 'Internal app storage + backup JSON', trailing: Icons.chevron_right_rounded, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => StorageModeScreen(store: store)))),
+                SettingsTile(icon: Icons.storage_rounded, title: 'Storage Mode', subtitle: 'Internal / SD public path + backup JSON', trailing: Icons.chevron_right_rounded, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => StorageModeScreen(store: store)))),
                 SettingsTile(icon: Icons.cloud_upload_rounded, title: 'Backup & Ekspor', subtitle: 'Buat file backup koleksi', trailing: Icons.chevron_right_rounded, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => StorageModeScreen(store: store)))),
                 SettingsTile(icon: Icons.lock_rounded, title: 'Mode Privat', subtitle: 'Dilewati dulu; bisa lanjut V6 nanti', trailing: Icons.lock_outline_rounded),
-                SettingsTile(icon: Icons.info_rounded, title: 'Tentang WaifuVault', subtitle: 'v1.7.0 V8 Advanced Gallery', trailing: Icons.chevron_right_rounded),
+                SettingsTile(icon: Icons.info_rounded, title: 'Tentang WaifuVault', subtitle: 'v1.7.5 V8.5 Clean Home Menu', trailing: Icons.chevron_right_rounded),
               ],
             );
           },
@@ -1287,9 +1317,50 @@ class _StorageModeScreenState extends State<StorageModeScreen> {
     });
   }
 
+  Future<void> scanAllManagedFolders() async {
+    if (busy) return;
+    setState(() {
+      busy = true;
+      lastMessage = 'Cek izin storage Android...';
+    });
+
+    final allowed = await ensureStorageAccessForFixedSd(context);
+    if (!mounted) return;
+    if (!allowed) {
+      setState(() {
+        busy = false;
+        lastMessage = 'Izin file belum aktif. Aktifkan All files access lalu scan ulang.';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Aktifkan izin file dulu, lalu scan ulang.')));
+      return;
+    }
+
+    setState(() {
+      busy = true;
+      lastMessage = 'Scan internal + SD DCM Waifu...';
+    });
+
+    final internalFound = await findMediaFiles(kPublicInternalVaultPath);
+    final sdPath = await resolveFixedSdImportPath();
+    final sdFound = sdPath == null ? <File>[] : await findMediaFiles(sdPath);
+    final result = await widget.store.scanManagedFolders();
+
+    if (!mounted) return;
+    final totalFound = internalFound.length + sdFound.length;
+    final totalAdded = result.internalAdded + result.sdAdded;
+    setState(() {
+      busy = false;
+      lastMessage = totalFound == 0
+          ? 'Dua folder kebaca, tapi 0 media didukung. Cek ekstensi file atau izin storage.'
+          : 'Scan selesai: internal ${internalFound.length} file, SD ${sdFound.length} file, $totalAdded item baru masuk.';
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(totalAdded == 0 ? 'Tidak ada item baru. Media mungkin sudah masuk.' : '$totalAdded media baru masuk dari folder DCM Waifu.')),
+    );
+  }
+
   Future<void> importFixedSdFolder() async {
     if (busy) return;
-
     setState(() {
       busy = true;
       lastMessage = 'Cek izin storage Android...';
@@ -1329,14 +1400,14 @@ class _StorageModeScreenState extends State<StorageModeScreen> {
       busy = false;
       lastMessage = found.isEmpty
           ? 'Folder kebaca, tapi 0 media didukung. Cek ekstensi file: jpg/png/webp/heic/mp4/mov/mkv.'
-          : 'SD scan selesai: ketemu ${found.length} media, $added item baru diimport.';
+          : 'SD scan selesai: ketemu ${found.length} media, $added item baru masuk path SD.';
     });
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
           found.isEmpty
               ? 'Folder kebaca, tapi media belum terdeteksi. Cek izin/ekstensi file.'
-              : (added == 0 ? 'Media sudah pernah diimport / tidak ada item baru.' : '$added media berhasil diimport dari SD.'),
+              : (added == 0 ? 'Media sudah pernah masuk / tidak ada item baru.' : '$added media berhasil masuk dari path SD.'),
         ),
       ),
     );
@@ -1360,7 +1431,7 @@ class _StorageModeScreenState extends State<StorageModeScreen> {
                       Expanded(
                         child: GradientText('Storage Mode', style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900)),
                       ),
-                      const ProBadge(),
+                      const SizedBox.shrink(),
                     ],
                   ),
                   const SizedBox(height: 14),
@@ -1387,9 +1458,9 @@ class _StorageModeScreenState extends State<StorageModeScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('Internal App Storage', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+                                  Text('Dual Folder Auto Scan', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
                                   SizedBox(height: 4),
-                                  Text('Foto/video dicopy ke folder aplikasi.', style: TextStyle(color: kTextSoft)),
+                                  Text('Taruh file manual di folder DCM Waifu, lalu scan / buka ulang.', style: TextStyle(color: kTextSoft)),
                                 ],
                               ),
                             ),
@@ -1397,7 +1468,7 @@ class _StorageModeScreenState extends State<StorageModeScreen> {
                         ),
                         const SizedBox(height: 14),
                         const Text(
-                          'Mode ini paling aman buat HP: koleksi tetap kebaca walau file asli di galeri dihapus. SD Card pakai path tetap DCM Waifu + izin All files access biar scan lebih kuat.',
+                          'V8.5 tetap bisa baca dua jalur publik: Internal /storage/emulated/0/DCM Waifu/ dan SD /storage/4394-15F8/DCM Waifu/. File manual di folder itu bisa masuk koleksi tanpa tombol import picker.',
                           style: TextStyle(color: kTextSoft, height: 1.35),
                         ),
                       ],
@@ -1408,7 +1479,7 @@ class _StorageModeScreenState extends State<StorageModeScreen> {
                     children: [
                       Expanded(child: DashboardStat(icon: Icons.grid_view_rounded, label: 'Item', value: '${widget.store.items.length}', color: kPurple)),
                       const SizedBox(width: 10),
-                      Expanded(child: DashboardStat(icon: Icons.copy_rounded, label: 'File', value: '${widget.store.copiedFileCount}', color: kBlue)),
+                      Expanded(child: DashboardStat(icon: Icons.sd_storage_rounded, label: 'Public', value: '${widget.store.copiedFileCount}', color: kBlue)),
                       const SizedBox(width: 10),
                       Expanded(child: DashboardStat(icon: Icons.favorite_rounded, label: 'Favorit', value: '${widget.store.favoriteCount}', color: kPink)),
                     ],
@@ -1421,7 +1492,7 @@ class _StorageModeScreenState extends State<StorageModeScreen> {
                       children: [
                         const Text('Backup Koleksi', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
                         const SizedBox(height: 6),
-                        const Text('Bikin file JSON berisi data koleksi. Media tetap ada di folder app, backup ini buat daftar item dan metadata.', style: TextStyle(color: kTextSoft)),
+                        const Text('Bikin file JSON berisi data koleksi. Media tetap ada di folder DCM Waifu internal/SD, backup ini buat daftar item dan metadata.', style: TextStyle(color: kTextSoft)),
                         const SizedBox(height: 14),
                         SizedBox(
                           width: double.infinity,
@@ -1477,6 +1548,34 @@ class _StorageModeScreenState extends State<StorageModeScreen> {
                   ),
                   const SizedBox(height: 14),
                   GestureDetector(
+                    onTap: busy ? null : scanAllManagedFolders,
+                    child: GlassPanel(
+                      padding: const EdgeInsets.all(16),
+                      borderColor: kBlue.withOpacity(0.34),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.sync_rounded, color: kBlue, size: 32),
+                          const SizedBox(width: 14),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Scan Semua DCM Waifu', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 17)),
+                                SizedBox(height: 4),
+                                Text('Baca internal + SD. Cocok kalau lu pindah file manual ke folder.', style: TextStyle(color: kTextSoft)),
+                                SizedBox(height: 4),
+                                Text('/storage/emulated/0/DCM Waifu/ + /storage/4394-15F8/DCM Waifu/', style: TextStyle(color: kTextSoft, fontSize: 11)),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          if (busy) const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) else const Icon(Icons.folder_sync_rounded, color: kPink),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  GestureDetector(
                     onTap: busy ? null : importFixedSdFolder,
                     child: GlassPanel(
                       padding: const EdgeInsets.all(16),
@@ -1489,11 +1588,11 @@ class _StorageModeScreenState extends State<StorageModeScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('SD Card Auto Import', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 17)),
+                                Text('Scan SD Card DCM Waifu', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 17)),
                                 SizedBox(height: 4),
                                 Text('Path tetap: /storage/4394-15F8/DCM Waifu/', style: TextStyle(color: kTextSoft)),
                                 SizedBox(height: 4),
-                                Text('Tekan card ini buat scan & import. Kalau 0, aktifkan izin file.', style: TextStyle(color: kTextSoft, fontSize: 12)),
+                                Text('Scan khusus SD. Media tetap di SD; hapus item = hapus file SD.', style: TextStyle(color: kTextSoft, fontSize: 12)),
                               ],
                             ),
                           ),
@@ -1528,12 +1627,40 @@ class _StorageModeScreenState extends State<StorageModeScreen> {
 
 
 Future<Directory> getVaultDirectory(String folderName) async {
-  final base = await getApplicationDocumentsDirectory();
-  final dir = Directory(p.join(base.path, folderName));
+  // V8.5: jangan simpan media utama di folder private /data/user/0.
+  // Import biasa masuk folder publik internal, namanya disamain dengan folder SD: DCM Waifu.
+  Directory dir;
+  if (folderName == 'waifuvault_media') {
+    dir = Directory(kPublicInternalVaultPath);
+  } else if (folderName == 'waifuvault_thumbs') {
+    dir = Directory(kPublicInternalCachePath);
+  } else {
+    final base = await getApplicationDocumentsDirectory();
+    dir = Directory(p.join(base.path, folderName));
+  }
   if (!await dir.exists()) {
     await dir.create(recursive: true);
   }
   return dir;
+}
+
+bool isManagedSdMediaPath(String filePath) {
+  final normalized = filePath.replaceAll('\\', '/').replaceAll(RegExp(r'/+$'), '');
+  final base = kFixedSdImportPath.replaceAll('\\', '/').replaceAll(RegExp(r'/+$'), '');
+  return normalized.startsWith('$base/');
+}
+
+bool isManagedInternalMediaPath(String filePath) {
+  final normalized = filePath.replaceAll('\\', '/').replaceAll(RegExp(r'/+$'), '');
+  final base = kPublicInternalVaultPath.replaceAll('\\', '/').replaceAll(RegExp(r'/+$'), '');
+  final cacheBase = kPublicInternalCachePath.replaceAll('\\', '/').replaceAll(RegExp(r'/+$'), '');
+  return normalized.startsWith('$base/') && !normalized.startsWith('$cacheBase/');
+}
+
+bool isManagedInternalCachePath(String filePath) {
+  final normalized = filePath.replaceAll('\\', '/').replaceAll(RegExp(r'/+$'), '');
+  final base = kPublicInternalCachePath.replaceAll('\\', '/').replaceAll(RegExp(r'/+$'), '');
+  return normalized.startsWith('$base/');
 }
 
 Future<String> copyFileToVault(String originalPath, String mediaType) async {
@@ -2083,7 +2210,7 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
                           child: CircularProgressIndicator(strokeWidth: 2, color: accent),
                         )
                       else
-                        const ProBadge(),
+                        const SizedBox.shrink(),
                       const Spacer(),
                       NeonIconButton(icon: Icons.cast_rounded, onTap: () => showPreviewModeSheet(context)),
                       const SizedBox(width: 8),
@@ -2310,7 +2437,7 @@ class _SdCardPathScreenState extends State<SdCardPathScreen> {
                 padding: const EdgeInsets.all(16),
                 borderColor: kPurple.withOpacity(0.35),
                 child: const Text(
-                  'V7.4.1 pakai path SD tetap /storage/4394-15F8/DCM Waifu/ biar gak rawan salah input. File tetap dicopy ke internal app storage biar aman.',
+                  'V8.5: import biasa masuk /storage/emulated/0/DCM Waifu/, SD tetap /storage/4394-15F8/DCM Waifu/. Delete ikut hapus file utama.',
                   style: TextStyle(color: kTextSoft, height: 1.35),
                 ),
               ),
@@ -3351,19 +3478,21 @@ class EmptyState extends StatelessWidget {
                 decoration: TextDecoration.none,
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              subtitle,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: kTextSoft,
-                fontSize: 14,
-                height: 1.35,
-                decoration: TextDecoration.none,
+            if (subtitle.trim().isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                subtitle,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: kTextSoft,
+                  fontSize: 14,
+                  height: 1.35,
+                  decoration: TextDecoration.none,
+                ),
               ),
-            ),
+            ],
             if (actionLabel != null && onAction != null) ...[
               const SizedBox(height: 20),
               FilledButton.icon(onPressed: onAction, icon: const Icon(Icons.add_rounded), label: Text(actionLabel!)),
@@ -3425,6 +3554,55 @@ void showPreviewModeSheet(BuildContext context) {
             style: FilledButton.styleFrom(backgroundColor: kPink, foregroundColor: Colors.white),
             icon: const Icon(Icons.check_rounded),
             label: const Text('Oke'),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+
+void showHomeActionsSheet(BuildContext context, VaultStore store) {
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: kPanel,
+    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(26))),
+    builder: (sheetContext) => Padding(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Menu Beranda', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 8),
+          const Text('Tombol tambah dipindah ke sini biar beranda lebih clean.', style: TextStyle(color: kTextSoft)),
+          const SizedBox(height: 14),
+          ListTile(
+            leading: const Icon(Icons.add_photo_alternate_rounded, color: kPink),
+            title: const Text('Tambah Media'),
+            subtitle: const Text('Import foto/video lewat picker', style: TextStyle(color: kTextSoft)),
+            onTap: () {
+              Navigator.pop(sheetContext);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => AddMediaScreen(store: store)));
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.folder_sync_rounded, color: kBlue),
+            title: const Text('Scan Semua DCM Waifu'),
+            subtitle: const Text('Baca folder internal + SD tanpa import picker', style: TextStyle(color: kTextSoft)),
+            onTap: () async {
+              Navigator.pop(sheetContext);
+              final allowed = await ensureStorageAccessForFixedSd(context);
+              if (!context.mounted) return;
+              if (!allowed) {
+                showSnack(context, 'Aktifkan izin file dulu, lalu scan ulang.');
+                return;
+              }
+              final result = await store.scanManagedFolders();
+              if (!context.mounted) return;
+              final added = result.internalAdded + result.sdAdded;
+              showSnack(context, added == 0 ? 'Tidak ada media baru di DCM Waifu.' : '$added media baru masuk dari DCM Waifu.');
+            },
           ),
         ],
       ),
