@@ -1,21 +1,25 @@
-# WaifuVault V8 Advanced Gallery
+# WaifuVault V8.5 - Clean Home Menu
 
-WaifuVault V8 skips V6 and builds on V7.4.1 SD import. Fokus V8: gallery management biar koleksi makin gampang dirapihin.
+Upgrade dari V8.3:
 
-## V8 Upgrade
+- Bisa scan dua folder utama sekaligus:
 
-- Sort gallery: Terbaru, Terlama, A-Z, Favorit dulu.
-- Multi-select di Beranda: tahan card buat pilih item.
-- Batch delete item terpilih.
-- Edit judul dan kategori dari menu titik tiga preview foto/video.
-- Badge dashboard: V8 Advanced Gallery.
-- SD Card Auto Import V7.4.1 tetap aman.
-- Icon/splash V5 tetap aman.
-- Adaptive video color V3.1 tetap aman.
+```text
+/storage/emulated/0/DCM Waifu/
+/storage/4394-15F8/DCM Waifu/
+```
 
-## Upload / Replace
+- Kalau foto/video dipindah manual ke salah satu folder itu, WaifuVault bisa memasukkannya ke koleksi tanpa import picker.
+- App melakukan auto-scan ringan saat dibuka.
+- Di Storage Mode ada tombol **Scan Semua DCM Waifu** buat scan ulang manual.
+- File internal tetap di folder publik internal.
+- File SD tetap di SD, tidak dicopy ke internal.
+- Delete tetap mengikuti jalur:
+  - item internal -> hapus file internal DCM Waifu
+  - item SD -> hapus file SD DCM Waifu
+- Fitur V8 lain tetap ada: sort, multi-select, batch delete, edit judul/kategori, adaptive video color, icon/splash.
 
-Timpa file ini di GitHub:
+Upload/timpa file biasa:
 
 ```text
 pubspec.yaml
@@ -24,6 +28,12 @@ lib/main.dart
 .github/workflows/build-apk.yml
 ```
 
-Assets biarin aja kalau folder `assets/branding/` dari V5 masih ada.
+Assets branding dari V5 boleh dibiarkan.
 
-Version: 1.7.0+14
+
+## V8.5 Clean Home Menu
+- Tombol tambah tengah bawah dihapus dari beranda.
+- Tombol tambah dipindah ke menu titik tiga kanan atas.
+- Badge Pro dihilangkan.
+- Empty state beranda hanya menampilkan teks "Belum ada media".
+- Scan folder DCM Waifu tetap ada di menu titik tiga.
