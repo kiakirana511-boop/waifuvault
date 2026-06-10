@@ -53,8 +53,8 @@ const List<VaultCategory> defaultCategories = [
 
 PageRouteBuilder<T> smoothPageRoute<T>(Widget page) {
   return PageRouteBuilder<T>(
-    transitionDuration: const Duration(milliseconds: 240),
-    reverseTransitionDuration: const Duration(milliseconds: 190),
+    transitionDuration: const Duration(milliseconds: 320),
+    reverseTransitionDuration: const Duration(milliseconds: 240),
     pageBuilder: (context, animation, secondaryAnimation) => page,
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
       final curved = CurvedAnimation(
@@ -66,17 +66,32 @@ PageRouteBuilder<T> smoothPageRoute<T>(Widget page) {
         opacity: curved,
         child: SlideTransition(
           position: Tween<Offset>(
-            begin: const Offset(0.03, 0.025),
+            begin: const Offset(0.055, 0.04),
             end: Offset.zero,
           ).animate(curved),
           child: ScaleTransition(
-            scale: Tween<double>(begin: 0.985, end: 1.0).animate(curved),
+            scale: Tween<double>(begin: 0.965, end: 1.0).animate(curved),
             child: child,
           ),
         ),
       );
     },
   );
+}
+
+
+String mediaHeroTag(VaultMedia item) => 'waifuvault_media_${item.id}';
+
+String displayMediaTitle(VaultMedia item) {
+  final raw = item.title.trim();
+  final fallback = item.isVideo ? 'Video Baru' : 'Foto Baru';
+  if (raw.isEmpty) return fallback;
+  final looksTooLong = raw.length > 30;
+  final looksLikeCameraName = RegExp(r'^(img|vid|video|photo|screenshot|screenrecord|received|wa|pxl|dsc|mv|100)[_\-\s]?\d', caseSensitive: false).hasMatch(raw);
+  final looksLikeTimestamp = RegExp(r'\d{8,}').hasMatch(raw);
+  final looksLikeExtension = RegExp(r'\.(jpg|jpeg|png|webp|gif|heic|heif|mp4|mov|mkv|3gp)$', caseSensitive: false).hasMatch(raw);
+  if (looksTooLong || looksLikeCameraName || looksLikeTimestamp || looksLikeExtension) return fallback;
+  return raw;
 }
 
 class VaultMedia {
@@ -347,7 +362,7 @@ class VaultStore extends ChangeNotifier {
 
   Map<String, dynamic> backupPayload() => {
         'app': 'WaifuVault',
-        'version': '1.8.0 V8.7 Smooth Motion',
+        'version': '1.8.8 V8.8 Motion Plus',
         'exportedAt': DateTime.now().toIso8601String(),
         'itemCount': _items.length,
         'items': _items.map((e) => e.toJson()).toList(),
@@ -576,7 +591,7 @@ class _VaultShellState extends State<VaultShell> {
     return Scaffold(
       extendBody: true,
       body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 230),
+        duration: const Duration(milliseconds: 290),
         switchInCurve: Curves.easeOutCubic,
         switchOutCurve: Curves.easeInCubic,
         transitionBuilder: (child, animation) {
@@ -584,8 +599,11 @@ class _VaultShellState extends State<VaultShell> {
           return FadeTransition(
             opacity: curved,
             child: SlideTransition(
-              position: Tween<Offset>(begin: const Offset(0.025, 0), end: Offset.zero).animate(curved),
-              child: child,
+              position: Tween<Offset>(begin: const Offset(0.04, 0.012), end: Offset.zero).animate(curved),
+              child: ScaleTransition(
+                scale: Tween<double>(begin: 0.985, end: 1.0).animate(curved),
+                child: child,
+              ),
             ),
           );
         },
@@ -982,7 +1000,7 @@ class PremiumDashboard extends StatelessWidget {
                             children: [
                               Icon(Icons.bolt_rounded, size: 16, color: kBlue),
                               SizedBox(width: 5),
-                              Text('V8.7 Smooth Motion', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900)),
+                              Text('V8.8 Motion Plus', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900)),
                             ],
                           ),
                         ),
@@ -1296,7 +1314,7 @@ class ProfileScreen extends StatelessWidget {
                 SettingsTile(icon: Icons.storage_rounded, title: 'Storage Mode', subtitle: 'Internal / SD public path + backup JSON', trailing: Icons.chevron_right_rounded, onTap: () => Navigator.push(context, smoothPageRoute(StorageModeScreen(store: store)))),
                 SettingsTile(icon: Icons.cloud_upload_rounded, title: 'Backup & Ekspor', subtitle: 'Buat file backup koleksi', trailing: Icons.chevron_right_rounded, onTap: () => Navigator.push(context, smoothPageRoute(StorageModeScreen(store: store)))),
                 SettingsTile(icon: Icons.lock_rounded, title: 'Mode Privat', subtitle: 'Dilewati dulu; bisa lanjut V6 nanti', trailing: Icons.lock_outline_rounded),
-                SettingsTile(icon: Icons.info_rounded, title: 'Tentang WaifuVault', subtitle: 'v1.8.0 V8.7 Smooth Motion', trailing: Icons.chevron_right_rounded),
+                SettingsTile(icon: Icons.info_rounded, title: 'Tentang WaifuVault', subtitle: 'v1.8.8 V8.8 Motion Plus', trailing: Icons.chevron_right_rounded),
               ],
             );
           },
@@ -1577,7 +1595,7 @@ class _StorageModeScreenState extends State<StorageModeScreen> {
                         ),
                         const SizedBox(height: 14),
                         const Text(
-                          'V8.7 tambah smooth motion: pindah tab fade/slide, buka foto/video lebih halus, menu titik tiga naik smooth, dan auto-scan DCM Waifu tetap jalan.',
+                          'V8.8 Motion Plus: transisi tab lebih jelas, buka foto/video pakai hero zoom, card media lebih clean, nama file panjang otomatis dirapikan jadi Foto Baru / Video Baru.',
                           style: TextStyle(color: kTextSoft, height: 1.35),
                         ),
                       ],
@@ -1792,9 +1810,7 @@ String? mediaTypeFromPath(String filePath) {
 }
 
 String titleFromFile(String filePath, String type) {
-  final raw = p.basenameWithoutExtension(filePath).replaceAll(RegExp(r'[_-]+'), ' ').trim();
-  if (raw.isEmpty) return type == 'video' ? 'Video Baru' : 'Foto Baru';
-  return raw.length > 42 ? raw.substring(0, 42).trim() : raw;
+  return type == 'video' ? 'Video Baru' : 'Foto Baru';
 }
 
 Future<List<File>> findMediaFiles(String folderPath, {int limit = 200}) async {
@@ -2159,17 +2175,21 @@ class ImagePreviewScreen extends StatelessWidget {
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 10),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(24),
-                      child: file.existsSync()
-                          ? InteractiveViewer(child: Image.file(file, fit: BoxFit.contain, width: double.infinity))
-                          : const Center(child: Text('File tidak ditemukan')),
+                    child: Hero(
+                      tag: mediaHeroTag(item),
+                      transitionOnUserGestures: true,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(24),
+                        child: file.existsSync()
+                            ? InteractiveViewer(child: Image.file(file, fit: BoxFit.contain, width: double.infinity))
+                            : const Center(child: Text('File tidak ditemukan')),
+                      ),
                     ),
                   ),
                 ),
                 PreviewActionPanel(
                   accent: accent,
-                  title: item.title,
+                  title: displayMediaTitle(item),
                   subtitle: '${item.category} • ${formatDate(item.createdAt)}',
                   indexText: '1 / ${store.items.length}',
                   favorite: item.favorite,
@@ -2331,15 +2351,19 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     child: Center(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(24),
-                        child: Container(
-                          color: Colors.black,
-                          child: missing
-                              ? const Center(child: Text('File video tidak ditemukan'))
-                              : ready
-                                  ? AspectRatio(aspectRatio: controller!.value.aspectRatio, child: VideoPlayer(controller!))
-                                  : const SizedBox(height: 220, child: Center(child: CircularProgressIndicator())),
+                      child: Hero(
+                        tag: mediaHeroTag(widget.item),
+                        transitionOnUserGestures: true,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(24),
+                          child: Container(
+                            color: Colors.black,
+                            child: missing
+                                ? const Center(child: Text('File video tidak ditemukan'))
+                                : ready
+                                    ? AspectRatio(aspectRatio: controller!.value.aspectRatio, child: VideoPlayer(controller!))
+                                    : const SizedBox(height: 220, child: Center(child: CircularProgressIndicator())),
+                          ),
                         ),
                       ),
                     ),
@@ -2399,7 +2423,7 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
                     children: [
                       Row(
                         children: [
-                          Expanded(child: Text(widget.item.title, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900))),
+                          Expanded(child: Text(displayMediaTitle(widget.item), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900))),
                           IconButton(
                             onPressed: () => widget.store.toggleFavorite(widget.item.id),
                             icon: Icon(widget.item.favorite ? Icons.favorite_rounded : Icons.favorite_border_rounded, color: widget.item.favorite ? kPink : Colors.white),
@@ -2546,7 +2570,7 @@ class _SdCardPathScreenState extends State<SdCardPathScreen> {
                 padding: const EdgeInsets.all(16),
                 borderColor: kPurple.withOpacity(0.35),
                 child: const Text(
-                  'V8.7: auto-scan folder DCM Waifu tetap jalan, ditambah transisi smooth ringan biar app gak kaku.',
+                  'V8.8: motion plus lebih kerasa, hero zoom preview, card lebih clean, dan auto-scan DCM Waifu tetap jalan.',
                   style: TextStyle(color: kTextSoft, height: 1.35),
                 ),
               ),
@@ -2870,7 +2894,12 @@ class MediaTile extends StatelessWidget {
     return GestureDetector(
       onTap: selectionMode ? onSelectedTap : () => open(context),
       onLongPress: onLongPress,
-      child: Container(
+      child: Hero(
+        tag: mediaHeroTag(item),
+        transitionOnUserGestures: true,
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
           border: Border.all(color: accent.withOpacity(0.55), width: 1.1),
@@ -2942,7 +2971,7 @@ class MediaTile extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      item.title,
+                      displayMediaTitle(item),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -2990,6 +3019,8 @@ class MediaTile extends StatelessWidget {
                   ),
                 ),
             ],
+          ),
+        ),
           ),
         ),
       ),
