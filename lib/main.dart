@@ -4235,3 +4235,61 @@ String formatDuration(Duration d) {
   final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
   return '$m:$s';
 }
+
+
+class ActionPill extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color? color;
+  final VoidCallback onTap;
+  const ActionPill({super.key, required this.icon, required this.label, required this.onTap, this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = color ?? Colors.white;
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: c, size: 24),
+            const SizedBox(height: 6),
+            Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: c.withOpacity(0.9), fontSize: 11, fontWeight: FontWeight.w700)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class SmallInfoButton extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  const SmallInfoButton({super.key, required this.label, required this.value, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        color: Colors.white.withOpacity(0.05),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 20, color: kBlue),
+          const SizedBox(height: 4),
+          Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: kTextSoft)),
+          const SizedBox(height: 2),
+          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+}
