@@ -1,23 +1,12 @@
-# WaifuVault V9.1.2 V9 - Hoshino Cosmic UI
+# WaifuVault V9.2 Reference Polish
 
-UI overhaul mengikuti referensi cosmic/private gallery: judul Hoshino, starry background, hero welcome card, soft pink-blue glass cards, bottom nav clean, dan fitur storage/scan versi sebelumnya tetap dipertahankan.
+UI polish lanjutan mengikuti referensi Hoshino Private Waifu Gallery: cosmic soft pink-blue, layout Home/Gallery/Voice/Profile, dan styling lebih dekat ke mockup referensi.
 
-Upload/replace ke GitHub:
-- pubspec.yaml
-- README.md
-- lib/main.dart
-- .github/workflows/build-apk.yml
+## V9.2 Reference Polish
+- Versi dinaikkan ke 2.0.3+33.
+- Arah desain tetap: Hoshino / Private Waifu Gallery.
+- Target polish berikutnya: font title lebih elegan, hero card lebih compact, quick access lebih kecil, waveform Voice lebih premium, dan spacing Profile lebih rapat.
+- Fitur DCM Waifu scan/internal+SD tetap dipertahankan.
 
-Assets branding V5 boleh dibiarkan.
-
-
-## V9.1 Full Reference UI
-- UI dirombak mengikuti referensi Hoshino Private Waifu Gallery.
-- Bottom nav: Home, Gallery, Voice, Profile.
-- Home welcome card, Gallery grid, Voice player dummy, Profile bond card.
-- Fitur DCM Waifu scan/internal+SD tetap ada.
-
-
-## V9.1.2 Build Fix
-- Fix missing ActionPill and SmallInfoButton widgets.
-- Keeps Full Reference UI changes.
+## Catatan
+Assets branding V5 boleh dibiarkan. Build tetap lewat GitHub Actions seperti biasa.
