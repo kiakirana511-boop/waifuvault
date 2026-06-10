@@ -1,4 +1,4 @@
-# WaifuVault V9 - Hoshino Cosmic UI
+# WaifuVault V9.1.2 V9 - Hoshino Cosmic UI
 
 UI overhaul mengikuti referensi cosmic/private gallery: judul Hoshino, starry background, hero welcome card, soft pink-blue glass cards, bottom nav clean, dan fitur storage/scan versi sebelumnya tetap dipertahankan.
 
@@ -18,6 +18,6 @@ Assets branding V5 boleh dibiarkan.
 - Fitur DCM Waifu scan/internal+SD tetap ada.
 
 
-## V9.1.1 Build Fix
+## V9.1.2 Build Fix
 - Fix missing ActionPill and SmallInfoButton widgets.
 - Keeps Full Reference UI changes.
