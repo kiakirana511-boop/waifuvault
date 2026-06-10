@@ -208,6 +208,32 @@ class VaultStore extends ChangeNotifier {
     await _save();
   }
 
+  Future<void> updateDetails(String id, {required String title, required String category}) async {
+    final index = _items.indexWhere((e) => e.id == id);
+    if (index == -1) return;
+    final cleanTitle = title.trim().isEmpty ? _items[index].title : title.trim();
+    final cleanCategory = category.trim().isEmpty ? _items[index].category : category.trim();
+    _items[index] = _items[index].copyWith(title: cleanTitle, category: cleanCategory);
+    notifyListeners();
+    await _save();
+  }
+
+  Future<void> deleteMany(Iterable<String> ids) async {
+    final set = ids.toSet();
+    if (set.isEmpty) return;
+    final targets = _items.where((e) => set.contains(e.id)).toList();
+    _items.removeWhere((e) => set.contains(e.id));
+    notifyListeners();
+    for (final item in targets) {
+      await _deleteVaultFile(item.path);
+      if (item.thumbnailPath != null) await _deleteVaultFile(item.thumbnailPath!);
+      for (final framePath in item.videoFramePaths) {
+        await _deleteVaultFile(framePath);
+      }
+    }
+    await _save();
+  }
+
   Future<void> updateVideoDynamicData(String id, VideoDynamicData data) async {
     final index = _items.indexWhere((e) => e.id == id);
     if (index == -1 || data.accentColors.isEmpty) return;
@@ -262,7 +288,7 @@ class VaultStore extends ChangeNotifier {
 
   Map<String, dynamic> backupPayload() => {
         'app': 'WaifuVault',
-        'version': '1.6.5 V7.4.1 Build Fix',
+        'version': '1.7.0 V8 Advanced Gallery',
         'exportedAt': DateTime.now().toIso8601String(),
         'itemCount': _items.length,
         'items': _items.map((e) => e.toJson()).toList(),
@@ -563,6 +589,9 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   String filter = 'all';
   String search = '';
+  String sortMode = 'newest';
+  bool selectionMode = false;
+  final Set<String> selectedIds = <String>{};
 
   List<VaultMedia> get filteredItems {
     var list = widget.store.items;
@@ -573,7 +602,59 @@ class _HomeScreenState extends State<HomeScreen> {
       final q = search.toLowerCase().trim();
       list = list.where((e) => e.title.toLowerCase().contains(q) || e.category.toLowerCase().contains(q)).toList();
     }
-    return list;
+    final sorted = [...list];
+    switch (sortMode) {
+      case 'oldest':
+        sorted.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+        break;
+      case 'az':
+        sorted.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+        break;
+      case 'favoriteFirst':
+        sorted.sort((a, b) {
+          if (a.favorite != b.favorite) return a.favorite ? -1 : 1;
+          return b.createdAt.compareTo(a.createdAt);
+        });
+        break;
+      default:
+        sorted.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    }
+    return sorted;
+  }
+
+  void toggleSelect(String id) {
+    setState(() {
+      if (selectedIds.contains(id)) {
+        selectedIds.remove(id);
+      } else {
+        selectedIds.add(id);
+      }
+      selectionMode = selectedIds.isNotEmpty;
+    });
+  }
+
+  void startSelect(String id) {
+    setState(() {
+      selectionMode = true;
+      selectedIds.add(id);
+    });
+  }
+
+  void clearSelection() {
+    setState(() {
+      selectionMode = false;
+      selectedIds.clear();
+    });
+  }
+
+  Future<void> deleteSelected() async {
+    final ids = selectedIds.toList();
+    if (ids.isEmpty) return;
+    final ok = await confirmBulkDelete(context, ids.length);
+    if (ok != true) return;
+    clearSelection();
+    await widget.store.deleteMany(ids);
+    if (mounted) showSnack(context, '${ids.length} item dihapus.');
   }
 
   @override
@@ -623,6 +704,33 @@ class _HomeScreenState extends State<HomeScreen> {
                             ],
                           ),
                         ),
+                        const SizedBox(height: 10),
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              VaultChip(label: 'Terbaru', icon: Icons.schedule_rounded, active: sortMode == 'newest', onTap: () => setState(() => sortMode = 'newest')),
+                              VaultChip(label: 'Terlama', icon: Icons.history_rounded, active: sortMode == 'oldest', onTap: () => setState(() => sortMode = 'oldest')),
+                              VaultChip(label: 'A-Z', icon: Icons.sort_by_alpha_rounded, active: sortMode == 'az', onTap: () => setState(() => sortMode = 'az')),
+                              VaultChip(label: 'Favorit dulu', icon: Icons.favorite_rounded, active: sortMode == 'favoriteFirst', onTap: () => setState(() => sortMode = 'favoriteFirst')),
+                            ],
+                          ),
+                        ),
+                        if (selectionMode) ...[
+                          const SizedBox(height: 12),
+                          SelectionToolbar(
+                            count: selectedIds.length,
+                            total: filteredItems.length,
+                            onCancel: clearSelection,
+                            onSelectAll: () => setState(() {
+                              selectedIds
+                                ..clear()
+                                ..addAll(filteredItems.map((e) => e.id));
+                              selectionMode = selectedIds.isNotEmpty;
+                            }),
+                            onDelete: deleteSelected,
+                          ),
+                        ],
                         const SizedBox(height: 14),
                         PremiumDashboard(store: widget.store, items: filteredItems),
                         const SizedBox(height: 18),
@@ -652,7 +760,17 @@ class _HomeScreenState extends State<HomeScreen> {
                         childAspectRatio: 0.72,
                       ),
                       delegate: SliverChildBuilderDelegate(
-                        (context, i) => MediaTile(item: filteredItems[i], store: widget.store),
+                        (context, i) {
+                          final item = filteredItems[i];
+                          return MediaTile(
+                            item: item,
+                            store: widget.store,
+                            selectionMode: selectionMode,
+                            selected: selectedIds.contains(item.id),
+                            onSelectedTap: () => toggleSelect(item.id),
+                            onLongPress: () => startSelect(item.id),
+                          );
+                        },
                         childCount: filteredItems.length,
                       ),
                     ),
@@ -719,7 +837,7 @@ class PremiumDashboard extends StatelessWidget {
                             children: [
                               Icon(Icons.bolt_rounded, size: 16, color: kBlue),
                               SizedBox(width: 5),
-                              Text('V7.4.1 SD Fix', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900)),
+                              Text('V8 Advanced Gallery', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900)),
                             ],
                           ),
                         ),
@@ -1039,7 +1157,7 @@ class ProfileScreen extends StatelessWidget {
                 SettingsTile(icon: Icons.storage_rounded, title: 'Storage Mode', subtitle: 'Internal app storage + backup JSON', trailing: Icons.chevron_right_rounded, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => StorageModeScreen(store: store)))),
                 SettingsTile(icon: Icons.cloud_upload_rounded, title: 'Backup & Ekspor', subtitle: 'Buat file backup koleksi', trailing: Icons.chevron_right_rounded, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => StorageModeScreen(store: store)))),
                 SettingsTile(icon: Icons.lock_rounded, title: 'Mode Privat', subtitle: 'Dilewati dulu; bisa lanjut V6 nanti', trailing: Icons.lock_outline_rounded),
-                SettingsTile(icon: Icons.info_rounded, title: 'Tentang WaifuVault', subtitle: 'v1.6.5 V7.4.1 SD Permission Fix', trailing: Icons.chevron_right_rounded),
+                SettingsTile(icon: Icons.info_rounded, title: 'Tentang WaifuVault', subtitle: 'v1.7.0 V8 Advanced Gallery', trailing: Icons.chevron_right_rounded),
               ],
             );
           },
@@ -2409,10 +2527,66 @@ class _PrivatePinScreenState extends State<PrivatePinScreen> {
   }
 }
 
+
+class SelectionToolbar extends StatelessWidget {
+  final int count;
+  final int total;
+  final VoidCallback onCancel;
+  final VoidCallback onSelectAll;
+  final VoidCallback onDelete;
+  const SelectionToolbar({
+    super.key,
+    required this.count,
+    required this.total,
+    required this.onCancel,
+    required this.onSelectAll,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassPanel(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      borderColor: kPink.withOpacity(0.38),
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const LinearGradient(colors: [kPink, kPurple]),
+              boxShadow: const [BoxShadow(color: Color(0x55FF4FB8), blurRadius: 16)],
+            ),
+            child: const Icon(Icons.check_rounded, size: 20),
+          ),
+          const SizedBox(width: 10),
+          Expanded(child: Text('$count dipilih', style: const TextStyle(fontWeight: FontWeight.w900))),
+          TextButton(onPressed: onSelectAll, child: Text(count == total ? 'Semua' : 'Pilih semua')),
+          IconButton(onPressed: onDelete, icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent)),
+          IconButton(onPressed: onCancel, icon: const Icon(Icons.close_rounded)),
+        ],
+      ),
+    );
+  }
+}
+
 class MediaTile extends StatelessWidget {
   final VaultMedia item;
   final VaultStore store;
-  const MediaTile({super.key, required this.item, required this.store});
+  final bool selectionMode;
+  final bool selected;
+  final VoidCallback? onSelectedTap;
+  final VoidCallback? onLongPress;
+  const MediaTile({
+    super.key,
+    required this.item,
+    required this.store,
+    this.selectionMode = false,
+    this.selected = false,
+    this.onSelectedTap,
+    this.onLongPress,
+  });
 
   void open(BuildContext context) {
     if (item.isImage) {
@@ -2429,7 +2603,8 @@ class MediaTile extends StatelessWidget {
     final hasThumb = thumbFile != null && thumbFile.existsSync();
     final accent = Color(item.accentColor ?? (item.isVideo ? kBlue.value : kPink.value));
     return GestureDetector(
-      onTap: () => open(context),
+      onTap: selectionMode ? onSelectedTap : () => open(context),
+      onLongPress: onLongPress,
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
@@ -2467,6 +2642,20 @@ class MediaTile extends StatelessWidget {
                   ),
                 ),
               ),
+              if (selectionMode)
+                Positioned(
+                  top: 6,
+                  left: 6,
+                  child: Container(
+                    padding: const EdgeInsets.all(5),
+                    decoration: BoxDecoration(
+                      color: selected ? kPink : Colors.black.withOpacity(0.42),
+                      borderRadius: BorderRadius.circular(99),
+                      border: Border.all(color: Colors.white24),
+                    ),
+                    child: Icon(selected ? Icons.check_rounded : Icons.circle_outlined, color: Colors.white, size: 18),
+                  ),
+                ),
               Positioned(
                 top: 6,
                 right: 6,
@@ -3278,6 +3467,15 @@ void showMediaOptionsSheet(BuildContext context, VaultStore store, VaultMedia it
               },
             ),
           ListTile(
+            leading: const Icon(Icons.edit_rounded, color: kPurple),
+            title: const Text('Edit judul / kategori'),
+            subtitle: const Text('Rename dan pindah kategori', style: TextStyle(color: kTextSoft)),
+            onTap: () {
+              Navigator.pop(sheetContext);
+              showEditMediaSheet(context, store, item);
+            },
+          ),
+          ListTile(
             leading: const Icon(Icons.folder_copy_rounded, color: kBlue),
             title: const Text('Lihat path file'),
             onTap: () {
@@ -3302,6 +3500,90 @@ void showMediaOptionsSheet(BuildContext context, VaultStore store, VaultMedia it
           ),
         ],
       ),
+    ),
+  );
+}
+
+
+Future<void> showEditMediaSheet(BuildContext context, VaultStore store, VaultMedia item) async {
+  final titleController = TextEditingController(text: item.title);
+  var selectedCategory = item.category;
+  final categories = <String>{...defaultCategories.map((e) => e.name), item.category}.toList();
+
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: kPanel,
+    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(26))),
+    builder: (sheetContext) {
+      return StatefulBuilder(
+        builder: (context, setSheetState) {
+          return Padding(
+            padding: EdgeInsets.fromLTRB(18, 18, 18, MediaQuery.of(context).viewInsets.bottom + 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Edit Media', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: titleController,
+                  decoration: InputDecoration(
+                    labelText: 'Judul',
+                    prefixIcon: const Icon(Icons.drive_file_rename_outline_rounded),
+                    filled: true,
+                    fillColor: Colors.white.withOpacity(0.06),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide.none),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: categories.contains(selectedCategory) ? selectedCategory : categories.first,
+                  dropdownColor: kPanel2,
+                  decoration: InputDecoration(
+                    labelText: 'Kategori',
+                    prefixIcon: const Icon(Icons.category_rounded),
+                    filled: true,
+                    fillColor: Colors.white.withOpacity(0.06),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide.none),
+                  ),
+                  items: categories.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                  onChanged: (v) => setSheetState(() => selectedCategory = v ?? selectedCategory),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: () async {
+                      await store.updateDetails(item.id, title: titleController.text, category: selectedCategory);
+                      if (sheetContext.mounted) Navigator.pop(sheetContext);
+                      if (context.mounted) showSnack(context, 'Info media disimpan.');
+                    },
+                    style: FilledButton.styleFrom(backgroundColor: kPink, foregroundColor: Colors.white),
+                    icon: const Icon(Icons.save_rounded),
+                    label: const Text('Simpan'),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    },
+  );
+  titleController.dispose();
+}
+
+Future<bool?> confirmBulkDelete(BuildContext context, int count) async {
+  return showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text('Hapus $count item?'),
+      content: const Text('Semua item terpilih akan dihapus dari WaifuVault. Salinan file di folder aplikasi juga ikut dihapus.'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal')),
+        FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Hapus')),
+      ],
     ),
   );
 }
