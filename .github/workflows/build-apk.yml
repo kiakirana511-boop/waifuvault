@@ -26,6 +26,22 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Set app display name
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          manifest = Path('android/app/src/main/AndroidManifest.xml')
+          text = manifest.read_text()
+          text = text.replace('android:label="waifuvault"', 'android:label="WaifuVault"')
+          text = text.replace('android:label="waifuvault"', 'android:label="WaifuVault"')
+          manifest.write_text(text)
+          PY
+
+      - name: Generate branding assets
+        run: |
+          dart run flutter_launcher_icons
+          dart run flutter_native_splash:create
+
       - name: Build APK
         run: flutter build apk --release
 
