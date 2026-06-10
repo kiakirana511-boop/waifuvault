@@ -230,6 +230,68 @@ class VaultStore extends ChangeNotifier {
     await _save();
   }
 
+  Map<String, dynamic> backupPayload() => {
+        'app': 'WaifuVault',
+        'version': '1.6.0 V7 Storage Mode',
+        'exportedAt': DateTime.now().toIso8601String(),
+        'itemCount': _items.length,
+        'items': _items.map((e) => e.toJson()).toList(),
+      };
+
+  Future<String> exportBackup() async {
+    final external = await getExternalStorageDirectory();
+    final docs = await getApplicationDocumentsDirectory();
+    final base = external ?? docs;
+    final backupDir = Directory(p.join(base.path, 'WaifuVault_Backup'));
+    if (!await backupDir.exists()) await backupDir.create(recursive: true);
+    final stamp = DateTime.now().toIso8601String().replaceAll(':', '-').split('.').first;
+    final file = File(p.join(backupDir.path, 'waifuvault_backup_$stamp.json'));
+    await file.writeAsString(const JsonEncoder.withIndent('  ').convert(backupPayload()), flush: true);
+    return file.path;
+  }
+
+  int get copiedFileCount {
+    int count = 0;
+    for (final item in _items) {
+      if (item.path.contains('waifuvault_media')) count++;
+      if ((item.thumbnailPath ?? '').contains('waifuvault_thumbs')) count++;
+      count += item.videoFramePaths.where((e) => e.contains('waifuvault_thumbs')).length;
+    }
+    return count;
+  }
+
+  Future<int> countMissingMediaFiles() async {
+    int missing = 0;
+    for (final item in _items) {
+      if (!await File(item.path).exists()) missing++;
+    }
+    return missing;
+  }
+
+  Future<int> cleanMissingMediaItems() async {
+    final before = _items.length;
+    final kept = <VaultMedia>[];
+    for (final item in _items) {
+      if (await File(item.path).exists()) {
+        kept.add(item);
+      } else {
+        if (item.thumbnailPath != null) await _deleteVaultFile(item.thumbnailPath!);
+        for (final framePath in item.videoFramePaths) {
+          await _deleteVaultFile(framePath);
+        }
+      }
+    }
+    _items
+      ..clear()
+      ..addAll(kept);
+    final removed = before - _items.length;
+    if (removed > 0) {
+      notifyListeners();
+      await _save();
+    }
+    return removed;
+  }
+
   int countFor(String category) => _items.where((e) => e.category == category).length;
   int get imageCount => _items.where((e) => e.isImage).length;
   int get videoCount => _items.where((e) => e.isVideo).length;
@@ -455,16 +517,20 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: GradientText(
-                                'WaifuVault',
-                                style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w900),
+                        SizedBox(
+                          height: 54,
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              Center(
+                                child: GradientText(
+                                  'WaifuVault',
+                                  style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w900),
+                                ),
                               ),
-                            ),
-                            const ProBadge(),
-                          ],
+                              const Positioned(right: 0, top: 6, child: ProBadge()),
+                            ],
+                          ),
                         ),
                         const SizedBox(height: 14),
                         SearchBox(
@@ -579,7 +645,7 @@ class PremiumDashboard extends StatelessWidget {
                             children: [
                               Icon(Icons.bolt_rounded, size: 16, color: kBlue),
                               SizedBox(width: 5),
-                              Text('V5 Branding', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900)),
+                              Text('V7 Storage Mode', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900)),
                             ],
                           ),
                         ),
@@ -896,25 +962,260 @@ class ProfileScreen extends StatelessWidget {
                 const SizedBox(height: 16),
                 SettingsTile(icon: Icons.palette_rounded, title: 'Tema', subtitle: 'Adaptive Dynamic', trailing: Icons.chevron_right_rounded),
                 SettingsTile(icon: Icons.language_rounded, title: 'Bahasa', subtitle: 'Indonesia', trailing: Icons.chevron_right_rounded),
-                SettingsTile(icon: Icons.storage_rounded, title: 'Penyimpanan', subtitle: 'Kelola file & cache', trailing: Icons.chevron_right_rounded),
-                SettingsTile(icon: Icons.cloud_upload_rounded, title: 'Backup & Ekspor', subtitle: 'Cadangkan koleksi', trailing: Icons.chevron_right_rounded),
-                GlassPanel(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  child: SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    value: store.privateMode,
-                    onChanged: (v) => togglePrivate(context, v),
-                    activeColor: kPink,
-                    title: const Text('Mode Privat', style: TextStyle(fontWeight: FontWeight.w700)),
-                    subtitle: const Text('Kunci aplikasi dengan PIN demo 1234', style: TextStyle(color: kTextSoft)),
-                    secondary: const Icon(Icons.lock_rounded, color: kBlue),
-                  ),
-                ),
-                SettingsTile(icon: Icons.info_rounded, title: 'Tentang WaifuVault', subtitle: 'v1.4.0 V5 Branding', trailing: Icons.chevron_right_rounded),
+                SettingsTile(icon: Icons.storage_rounded, title: 'Storage Mode', subtitle: 'Internal app storage + backup JSON', trailing: Icons.chevron_right_rounded, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => StorageModeScreen(store: store)))),
+                SettingsTile(icon: Icons.cloud_upload_rounded, title: 'Backup & Ekspor', subtitle: 'Buat file backup koleksi', trailing: Icons.chevron_right_rounded, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => StorageModeScreen(store: store)))),
+                SettingsTile(icon: Icons.lock_rounded, title: 'Mode Privat', subtitle: 'Dilewati dulu; bisa lanjut V6 nanti', trailing: Icons.lock_outline_rounded),
+                SettingsTile(icon: Icons.info_rounded, title: 'Tentang WaifuVault', subtitle: 'v1.6.0 V7 Storage Mode', trailing: Icons.chevron_right_rounded),
               ],
             );
           },
+        ),
+      ),
+    );
+  }
+}
+
+
+class StorageModeScreen extends StatefulWidget {
+  final VaultStore store;
+  const StorageModeScreen({super.key, required this.store});
+
+  @override
+  State<StorageModeScreen> createState() => _StorageModeScreenState();
+}
+
+class _StorageModeScreenState extends State<StorageModeScreen> {
+  bool busy = false;
+  String? lastMessage;
+  String? lastBackupPath;
+  int? missingCount;
+
+  Future<void> exportBackup() async {
+    if (busy) return;
+    setState(() {
+      busy = true;
+      lastMessage = 'Membuat backup...';
+    });
+    try {
+      final path = await widget.store.exportBackup();
+      if (!mounted) return;
+      setState(() {
+        busy = false;
+        lastBackupPath = path;
+        lastMessage = 'Backup berhasil dibuat.';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Backup WaifuVault berhasil dibuat.')));
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        busy = false;
+        lastMessage = 'Gagal membuat backup.';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Gagal membuat backup.')));
+    }
+  }
+
+  Future<void> scanMissing() async {
+    if (busy) return;
+    setState(() {
+      busy = true;
+      lastMessage = 'Scan file media...';
+    });
+    final count = await widget.store.countMissingMediaFiles();
+    if (!mounted) return;
+    setState(() {
+      busy = false;
+      missingCount = count;
+      lastMessage = count == 0 ? 'Semua file media aman.' : '$count item file medianya hilang.';
+    });
+  }
+
+  Future<void> cleanMissing() async {
+    if (busy) return;
+    setState(() {
+      busy = true;
+      lastMessage = 'Membersihkan item rusak...';
+    });
+    final removed = await widget.store.cleanMissingMediaItems();
+    if (!mounted) return;
+    setState(() {
+      busy = false;
+      missingCount = null;
+      lastMessage = removed == 0 ? 'Tidak ada item rusak.' : '$removed item rusak dibersihkan.';
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: NeonBackground(
+        child: SafeArea(
+          child: AnimatedBuilder(
+            animation: widget.store,
+            builder: (context, _) {
+              return ListView(
+                padding: const EdgeInsets.fromLTRB(18, 14, 18, 28),
+                children: [
+                  Row(
+                    children: [
+                      NeonIconButton(icon: Icons.arrow_back_rounded, onTap: () => Navigator.pop(context)),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: GradientText('Storage Mode', style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900)),
+                      ),
+                      const ProBadge(),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  GlassPanel(
+                    padding: const EdgeInsets.all(18),
+                    borderColor: kBlue.withOpacity(0.32),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 56,
+                              height: 56,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(18),
+                                gradient: const LinearGradient(colors: [kBlue, kPurple]),
+                                boxShadow: const [BoxShadow(color: Color(0x6600E5FF), blurRadius: 24)],
+                              ),
+                              child: const Icon(Icons.folder_copy_rounded, color: Colors.white, size: 30),
+                            ),
+                            const SizedBox(width: 14),
+                            const Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Internal App Storage', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+                                  SizedBox(height: 4),
+                                  Text('Foto/video dicopy ke folder aplikasi.', style: TextStyle(color: kTextSoft)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        const Text(
+                          'Mode ini paling aman buat HP: koleksi tetap kebaca walau file asli di galeri dihapus. SD Card langsung belum dipaksa karena Android butuh izin folder khusus biar stabil.',
+                          style: TextStyle(color: kTextSoft, height: 1.35),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(child: DashboardStat(icon: Icons.grid_view_rounded, label: 'Item', value: '${widget.store.items.length}', color: kPurple)),
+                      const SizedBox(width: 10),
+                      Expanded(child: DashboardStat(icon: Icons.copy_rounded, label: 'File', value: '${widget.store.copiedFileCount}', color: kBlue)),
+                      const SizedBox(width: 10),
+                      Expanded(child: DashboardStat(icon: Icons.favorite_rounded, label: 'Favorit', value: '${widget.store.favoriteCount}', color: kPink)),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  GlassPanel(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Backup Koleksi', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                        const SizedBox(height: 6),
+                        const Text('Bikin file JSON berisi data koleksi. Media tetap ada di folder app, backup ini buat daftar item dan metadata.', style: TextStyle(color: kTextSoft)),
+                        const SizedBox(height: 14),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: FilledButton.icon(
+                            onPressed: busy ? null : exportBackup,
+                            style: FilledButton.styleFrom(backgroundColor: kPink, foregroundColor: Colors.white),
+                            icon: const Icon(Icons.cloud_upload_rounded),
+                            label: const Text('Buat Backup JSON'),
+                          ),
+                        ),
+                        if (lastBackupPath != null) ...[
+                          const SizedBox(height: 12),
+                          SelectableText(lastBackupPath!, style: const TextStyle(color: kTextSoft, fontSize: 12)),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  GlassPanel(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Perawatan Storage', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                        const SizedBox(height: 6),
+                        Text(
+                          missingCount == null ? 'Scan file untuk cek apakah ada item yang filenya hilang.' : 'Hasil scan: $missingCount file hilang.',
+                          style: const TextStyle(color: kTextSoft),
+                        ),
+                        const SizedBox(height: 14),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: busy ? null : scanMissing,
+                                icon: const Icon(Icons.search_rounded),
+                                label: const Text('Scan'),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: busy ? null : cleanMissing,
+                                icon: const Icon(Icons.cleaning_services_rounded),
+                                label: const Text('Bersihkan'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  GlassPanel(
+                    padding: const EdgeInsets.all(16),
+                    borderColor: kPurple.withOpacity(0.3),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.sd_storage_rounded, color: kPurple, size: 32),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: const [
+                              Text('SD Card Mode', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 17)),
+                              SizedBox(height: 4),
+                              Text('Disiapkan buat V7.x: nanti pakai pemilih folder Android biar gak hardcode path SD card.', style: TextStyle(color: kTextSoft)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (busy || lastMessage != null) ...[
+                    const SizedBox(height: 14),
+                    GlassPanel(
+                      padding: const EdgeInsets.all(14),
+                      child: Row(
+                        children: [
+                          if (busy) const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) else const Icon(Icons.check_circle_rounded, color: kBlue),
+                          const SizedBox(width: 12),
+                          Expanded(child: Text(lastMessage ?? 'Memproses...', style: const TextStyle(color: kTextSoft))),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              );
+            },
+          ),
         ),
       ),
     );
@@ -2332,29 +2633,37 @@ class SettingsTile extends StatelessWidget {
   final String title;
   final String subtitle;
   final IconData trailing;
-  const SettingsTile({super.key, required this.icon, required this.title, required this.subtitle, required this.trailing});
+  final VoidCallback? onTap;
+  const SettingsTile({super.key, required this.icon, required this.title, required this.subtitle, required this.trailing, this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return GlassPanel(
       margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        children: [
-          Icon(icon, color: kPurple, size: 30),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
-                const SizedBox(height: 3),
-                Text(subtitle, style: const TextStyle(color: kTextSoft)),
-              ],
-            ),
+      padding: EdgeInsets.zero,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(26),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Icon(icon, color: kPurple, size: 30),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
+                    const SizedBox(height: 3),
+                    Text(subtitle, style: const TextStyle(color: kTextSoft)),
+                  ],
+                ),
+              ),
+              Icon(trailing, color: kTextSoft),
+            ],
           ),
-          Icon(trailing, color: kTextSoft),
-        ],
+        ),
       ),
     );
   }
