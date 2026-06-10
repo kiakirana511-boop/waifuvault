@@ -16,3 +16,8 @@ Assets branding V5 boleh dibiarkan.
 - Bottom nav: Home, Gallery, Voice, Profile.
 - Home welcome card, Gallery grid, Voice player dummy, Profile bond card.
 - Fitur DCM Waifu scan/internal+SD tetap ada.
+
+
+## V9.1.1 Build Fix
+- Fix missing ActionPill and SmallInfoButton widgets.
+- Keeps Full Reference UI changes.
