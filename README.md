@@ -1,25 +1,17 @@
-# WaifuVault V8.5.3 - Dual Folder Auto Scan
+# WaifuVault V8.7 - Smooth Motion
 
-Upgrade dari V8.3:
+Upgrade dari V8.6: auto-scan DCM Waifu tetap ada, ditambah transisi smooth ringan biar app gak kaku.
 
-- Bisa scan dua folder utama sekaligus:
+## Isi V8.7
+- Auto-scan internal + SD DCM Waifu pas Home kebuka.
+- Pindah tab Beranda/Kategori/Koleksi/Profil pakai fade + slide halus.
+- Buka foto/video pakai smooth page transition.
+- Card media muncul lebih halus setelah scan/import.
+- Menu titik tiga tetap jadi pusat Tambah Media + Scan Semua DCM Waifu.
+- Badge Pro tetap hilang dan home tetap clean.
 
-```text
-/storage/emulated/0/DCM Waifu/
-/storage/4394-15F8/DCM Waifu/
-```
-
-- Kalau foto/video dipindah manual ke salah satu folder itu, WaifuVault bisa memasukkannya ke koleksi tanpa import picker.
-- App melakukan auto-scan ringan saat dibuka.
-- Di Storage Mode ada tombol **Scan Semua DCM Waifu** buat scan ulang manual.
-- File internal tetap di folder publik internal.
-- File SD tetap di SD, tidak dicopy ke internal.
-- Delete tetap mengikuti jalur:
-  - item internal -> hapus file internal DCM Waifu
-  - item SD -> hapus file SD DCM Waifu
-- Fitur V8 lain tetap ada: sort, multi-select, batch delete, edit judul/kategori, adaptive video color, icon/splash.
-
-Upload/timpa file biasa:
+## Upload ke GitHub
+Timpa file berikut:
 
 ```text
 pubspec.yaml
@@ -28,7 +20,4 @@ lib/main.dart
 .github/workflows/build-apk.yml
 ```
 
-Assets branding dari V5 boleh dibiarkan.
-
-
-V8.5.3 Clean Home Menu icon build fix.
+Assets branding biarin aja dari V5.
