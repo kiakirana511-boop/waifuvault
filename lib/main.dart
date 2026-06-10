@@ -579,7 +579,7 @@ class PremiumDashboard extends StatelessWidget {
                             children: [
                               Icon(Icons.bolt_rounded, size: 16, color: kBlue),
                               SizedBox(width: 5),
-                              Text('V4 Premium UI', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900)),
+                              Text('V5 Branding', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900)),
                             ],
                           ),
                         ),
@@ -911,7 +911,7 @@ class ProfileScreen extends StatelessWidget {
                     secondary: const Icon(Icons.lock_rounded, color: kBlue),
                   ),
                 ),
-                SettingsTile(icon: Icons.info_rounded, title: 'Tentang WaifuVault', subtitle: 'v1.3.0 V4 Premium UI', trailing: Icons.chevron_right_rounded),
+                SettingsTile(icon: Icons.info_rounded, title: 'Tentang WaifuVault', subtitle: 'v1.4.0 V5 Branding', trailing: Icons.chevron_right_rounded),
               ],
             );
           },
@@ -1082,7 +1082,7 @@ class _AddMediaScreenState extends State<AddMediaScreen> {
       selectedPath = file.path;
       selectedType = 'video';
       category = 'Video JJ';
-      if (titleController.text.trim().isEmpty) titleController.text = 'Video JJ Baru';
+      if (titleController.text.trim().isEmpty) titleController.text = 'Video Baru';
     });
   }
 
