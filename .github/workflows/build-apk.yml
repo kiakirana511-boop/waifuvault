@@ -30,20 +30,18 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          manifest = Path('android/app/src/main/AndroidManifest.xml')
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
           text = manifest.read_text()
           text = text.replace('android:label="waifuvault"', 'android:label="WaifuVault"')
-          text = text.replace('android:label="waifuvault"', 'android:label="WaifuVault"')
-          perms = '''
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
-    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
-'''
+          perms = "\n".join([
+              '    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />',
+              '    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />',
+              '    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />',
+              '    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />',
+              '    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />',
+          ]) + "\n"
           if 'android.permission.MANAGE_EXTERNAL_STORAGE' not in text:
-              text = text.replace('<application', perms + '
-    <application')
+              text = text.replace('<application', perms + '    <application')
           manifest.write_text(text)
           PY
 
