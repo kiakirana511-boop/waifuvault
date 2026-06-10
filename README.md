@@ -1,4 +1,4 @@
-# WaifuVault V8.5.2 - Dual Folder Auto Scan
+# WaifuVault V8.5.3 - Dual Folder Auto Scan
 
 Upgrade dari V8.3:
 
@@ -31,4 +31,4 @@ lib/main.dart
 Assets branding dari V5 boleh dibiarkan.
 
 
-V8.5.2 Clean Home Menu build fix.
+V8.5.3 Clean Home Menu icon build fix.
