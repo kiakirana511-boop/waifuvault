@@ -136,9 +136,11 @@ class VaultMedia {
 class VaultStore extends ChangeNotifier {
   static const String _itemsKey = 'waifuvault_items_v1';
   static const String _privateKey = 'waifuvault_private_mode_v1';
+  static const String _sdPathKey = 'waifuvault_sd_card_path_v1';
 
   final List<VaultMedia> _items = [];
   bool privateMode = false;
+  String? sdCardPath;
   bool loaded = false;
 
   List<VaultMedia> get items {
@@ -161,6 +163,7 @@ class VaultStore extends ChangeNotifier {
       }
     }
     privateMode = prefs.getBool(_privateKey) ?? false;
+    sdCardPath = prefs.getString(_sdPathKey);
     loaded = true;
     notifyListeners();
   }
@@ -169,6 +172,11 @@ class VaultStore extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_itemsKey, jsonEncode(_items.map((e) => e.toJson()).toList()));
     await prefs.setBool(_privateKey, privateMode);
+    if (sdCardPath == null || sdCardPath!.trim().isEmpty) {
+      await prefs.remove(_sdPathKey);
+    } else {
+      await prefs.setString(_sdPathKey, sdCardPath!.trim());
+    }
   }
 
   Future<void> add(VaultMedia item) async {
@@ -230,9 +238,16 @@ class VaultStore extends ChangeNotifier {
     await _save();
   }
 
+  Future<void> setSdCardPath(String? value) async {
+    final clean = value?.trim();
+    sdCardPath = clean == null || clean.isEmpty ? null : clean;
+    notifyListeners();
+    await _save();
+  }
+
   Map<String, dynamic> backupPayload() => {
         'app': 'WaifuVault',
-        'version': '1.6.0 V7 Storage Mode',
+        'version': '1.6.1 V7.1 Storage Hotfix',
         'exportedAt': DateTime.now().toIso8601String(),
         'itemCount': _items.length,
         'items': _items.map((e) => e.toJson()).toList(),
@@ -645,7 +660,7 @@ class PremiumDashboard extends StatelessWidget {
                             children: [
                               Icon(Icons.bolt_rounded, size: 16, color: kBlue),
                               SizedBox(width: 5),
-                              Text('V7 Storage Mode', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900)),
+                              Text('V7.1 Storage Fix', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900)),
                             ],
                           ),
                         ),
@@ -965,7 +980,7 @@ class ProfileScreen extends StatelessWidget {
                 SettingsTile(icon: Icons.storage_rounded, title: 'Storage Mode', subtitle: 'Internal app storage + backup JSON', trailing: Icons.chevron_right_rounded, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => StorageModeScreen(store: store)))),
                 SettingsTile(icon: Icons.cloud_upload_rounded, title: 'Backup & Ekspor', subtitle: 'Buat file backup koleksi', trailing: Icons.chevron_right_rounded, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => StorageModeScreen(store: store)))),
                 SettingsTile(icon: Icons.lock_rounded, title: 'Mode Privat', subtitle: 'Dilewati dulu; bisa lanjut V6 nanti', trailing: Icons.lock_outline_rounded),
-                SettingsTile(icon: Icons.info_rounded, title: 'Tentang WaifuVault', subtitle: 'v1.6.0 V7 Storage Mode', trailing: Icons.chevron_right_rounded),
+                SettingsTile(icon: Icons.info_rounded, title: 'Tentang WaifuVault', subtitle: 'v1.6.1 V7.1 Storage Hotfix', trailing: Icons.chevron_right_rounded),
               ],
             );
           },
@@ -1043,6 +1058,10 @@ class _StorageModeScreenState extends State<StorageModeScreen> {
       missingCount = null;
       lastMessage = removed == 0 ? 'Tidak ada item rusak.' : '$removed item rusak dibersihkan.';
     });
+  }
+
+  void openSdCardPath() {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => SdCardPathScreen(store: widget.store)));
   }
 
   @override
@@ -1179,24 +1198,34 @@ class _StorageModeScreenState extends State<StorageModeScreen> {
                     ),
                   ),
                   const SizedBox(height: 14),
-                  GlassPanel(
-                    padding: const EdgeInsets.all(16),
-                    borderColor: kPurple.withOpacity(0.3),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.sd_storage_rounded, color: kPurple, size: 32),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: const [
-                              Text('SD Card Mode', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 17)),
-                              SizedBox(height: 4),
-                              Text('Disiapkan buat V7.x: nanti pakai pemilih folder Android biar gak hardcode path SD card.', style: TextStyle(color: kTextSoft)),
-                            ],
+                  GestureDetector(
+                    onTap: openSdCardPath,
+                    child: GlassPanel(
+                      padding: const EdgeInsets.all(16),
+                      borderColor: kPurple.withOpacity(0.3),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.sd_storage_rounded, color: kPurple, size: 32),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('SD Card Mode', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 17)),
+                                const SizedBox(height: 4),
+                                Text(
+                                  widget.store.sdCardPath == null
+                                      ? 'Tekan untuk pilih/simpan path SD Card.'
+                                      : 'Path aktif: ${widget.store.sdCardPath}',
+                                  style: const TextStyle(color: kTextSoft),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 10),
+                          const Icon(Icons.chevron_right_rounded, color: kTextSoft),
+                        ],
+                      ),
                     ),
                   ),
                   if (busy || lastMessage != null) ...[
@@ -1574,7 +1603,7 @@ class ImagePreviewScreen extends StatelessWidget {
                       Expanded(child: GradientText('WaifuVault', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900))),
                       NeonIconButton(icon: item.favorite ? Icons.favorite_rounded : Icons.favorite_border_rounded, onTap: () => store.toggleFavorite(item.id)),
                       const SizedBox(width: 8),
-                      NeonIconButton(icon: Icons.more_vert_rounded, onTap: () {}),
+                      NeonIconButton(icon: Icons.more_vert_rounded, onTap: () => showMediaOptionsSheet(context, store, item)),
                     ],
                   ),
                 ),
@@ -1743,9 +1772,9 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
                       else
                         const ProBadge(),
                       const Spacer(),
-                      NeonIconButton(icon: Icons.cast_rounded, onTap: () {}),
+                      NeonIconButton(icon: Icons.cast_rounded, onTap: () => showPreviewModeSheet(context)),
                       const SizedBox(width: 8),
-                      NeonIconButton(icon: Icons.more_vert_rounded, onTap: () {}),
+                      NeonIconButton(icon: Icons.more_vert_rounded, onTap: () => showMediaOptionsSheet(context, widget.store, widget.item, onRefreshVideoColors: ensureDynamicColors)),
                     ],
                   ),
                 ),
@@ -1847,6 +1876,193 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+
+class SdCardPathScreen extends StatefulWidget {
+  final VaultStore store;
+  const SdCardPathScreen({super.key, required this.store});
+
+  @override
+  State<SdCardPathScreen> createState() => _SdCardPathScreenState();
+}
+
+class _SdCardPathScreenState extends State<SdCardPathScreen> {
+  late final TextEditingController pathController;
+  bool scanning = false;
+  List<String> detectedPaths = [];
+
+  @override
+  void initState() {
+    super.initState();
+    pathController = TextEditingController(text: widget.store.sdCardPath ?? '');
+    scanStorageRoots();
+  }
+
+  @override
+  void dispose() {
+    pathController.dispose();
+    super.dispose();
+  }
+
+  Future<void> scanStorageRoots() async {
+    setState(() => scanning = true);
+    final found = <String>[];
+    try {
+      final storage = Directory('/storage');
+      if (await storage.exists()) {
+        await for (final entity in storage.list(followLinks: false)) {
+          if (entity is Directory) {
+            final path = entity.path;
+            final name = p.basename(path).toLowerCase();
+            if (name == 'emulated' || name == 'self') continue;
+            found.add(path);
+          }
+        }
+      }
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() {
+      detectedPaths = found.toSet().toList()..sort();
+      scanning = false;
+    });
+  }
+
+  Future<void> savePath() async {
+    final value = pathController.text.trim();
+    if (value.isEmpty) {
+      showSnack(context, 'Path masih kosong.');
+      return;
+    }
+    await widget.store.setSdCardPath(value);
+    if (!mounted) return;
+    showSnack(context, 'Path SD Card disimpan.');
+  }
+
+  Future<void> clearPath() async {
+    pathController.clear();
+    await widget.store.setSdCardPath(null);
+    if (!mounted) return;
+    showSnack(context, 'Path SD Card dikosongkan.');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: NeonBackground(
+        child: SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(18, 14, 18, 30),
+            children: [
+              Row(
+                children: [
+                  NeonIconButton(icon: Icons.arrow_back_rounded, onTap: () => Navigator.pop(context)),
+                  const SizedBox(width: 12),
+                  Expanded(child: GradientText('SD Card Path', style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900))),
+                ],
+              ),
+              const SizedBox(height: 16),
+              GlassPanel(
+                padding: const EdgeInsets.all(16),
+                borderColor: kPurple.withOpacity(0.35),
+                child: const Text(
+                  'V7.1 baru nyimpen path dulu biar aman. Copy media langsung ke SD Card butuh Android folder permission/SAF, jadi nanti bisa lanjut V7.2 kalau path ini sudah kebaca.',
+                  style: TextStyle(color: kTextSoft, height: 1.35),
+                ),
+              ),
+              const SizedBox(height: 14),
+              GlassPanel(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Path tersimpan', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: pathController,
+                      decoration: InputDecoration(
+                        hintText: '/storage/XXXX-XXXX/WaifuVault',
+                        prefixIcon: const Icon(Icons.sd_storage_rounded),
+                        filled: true,
+                        fillColor: Colors.white.withOpacity(0.06),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide.none),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: FilledButton.icon(
+                            onPressed: savePath,
+                            style: FilledButton.styleFrom(backgroundColor: kPink, foregroundColor: Colors.white),
+                            icon: const Icon(Icons.save_rounded),
+                            label: const Text('Simpan Path'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        OutlinedButton.icon(
+                          onPressed: clearPath,
+                          icon: const Icon(Icons.close_rounded),
+                          label: const Text('Reset'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              GlassPanel(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Expanded(child: Text('Deteksi folder /storage', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900))),
+                        IconButton(onPressed: scanning ? null : scanStorageRoots, icon: const Icon(Icons.refresh_rounded)),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    if (scanning)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        child: Row(children: [SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)), SizedBox(width: 10), Text('Scan storage...')]),
+                      )
+                    else if (detectedPaths.isEmpty)
+                      const Text('Belum kebaca otomatis. Isi manual path SD Card lu di atas.', style: TextStyle(color: kTextSoft))
+                    else
+                      for (final path in detectedPaths)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 10),
+                          child: GestureDetector(
+                            onTap: () => setState(() => pathController.text = p.join(path, 'WaifuVault')),
+                            child: Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(16),
+                                color: Colors.white.withOpacity(0.05),
+                                border: Border.all(color: Colors.white10),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.folder_rounded, color: kBlue),
+                                  const SizedBox(width: 10),
+                                  Expanded(child: Text(path, style: const TextStyle(color: kTextSoft))),
+                                  const Icon(Icons.chevron_right_rounded),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -2174,10 +2390,10 @@ class PreviewActionPanel extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              ActionPill(icon: Icons.share_rounded, label: 'Bagikan', onTap: () {}),
-              ActionPill(icon: Icons.download_rounded, label: 'Unduh', onTap: () {}),
+              ActionPill(icon: Icons.info_outline_rounded, label: 'Info', onTap: () => showSnack(context, 'Info file ada di menu titik tiga atas.')),
+              ActionPill(icon: Icons.folder_copy_rounded, label: 'Path', onTap: () => showSnack(context, 'Path file bisa dicek dari menu titik tiga.')),
               ActionPill(icon: favorite ? Icons.favorite_rounded : Icons.favorite_border_rounded, label: 'Favorit', color: favorite ? kPink : null, onTap: onFavorite),
-              ActionPill(icon: Icons.wallpaper_rounded, label: 'Wallpaper', onTap: () {}),
+              ActionPill(icon: Icons.wallpaper_rounded, label: 'Preview', onTap: () => showSnack(context, 'Preview layar penuh sudah aktif di halaman ini.')), 
               ActionPill(icon: Icons.delete_outline_rounded, label: 'Hapus', color: Colors.redAccent, onTap: onDelete),
             ],
           ),
@@ -2754,6 +2970,101 @@ class PinButton extends StatelessWidget {
       ),
     );
   }
+}
+
+
+void showSnack(BuildContext context, String message) {
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+}
+
+void showPreviewModeSheet(BuildContext context) {
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: kPanel,
+    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(26))),
+    builder: (context) => Padding(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Preview Mode', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 10),
+          const Text('Tombol ini sekarang sudah aktif. Mode cast/layar eksternal asli belum dipaksa, biar video player tetap stabil di HP.', style: TextStyle(color: kTextSoft)),
+          const SizedBox(height: 14),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(context),
+            style: FilledButton.styleFrom(backgroundColor: kPink, foregroundColor: Colors.white),
+            icon: const Icon(Icons.check_rounded),
+            label: const Text('Oke'),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+void showMediaOptionsSheet(BuildContext context, VaultStore store, VaultMedia item, {Future<void> Function()? onRefreshVideoColors}) {
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: kPanel,
+    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(26))),
+    builder: (sheetContext) => Padding(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(item.isVideo ? 'Menu Video' : 'Menu Foto', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 8),
+          Text(item.title, style: const TextStyle(color: kTextSoft)),
+          const SizedBox(height: 14),
+          ListTile(
+            leading: Icon(item.favorite ? Icons.favorite_rounded : Icons.favorite_border_rounded, color: kPink),
+            title: Text(item.favorite ? 'Hapus dari favorit' : 'Tambah ke favorit'),
+            onTap: () async {
+              Navigator.pop(sheetContext);
+              await store.toggleFavorite(item.id);
+            },
+          ),
+          if (item.isVideo)
+            ListTile(
+              leading: const Icon(Icons.auto_awesome_rounded, color: kBlue),
+              title: const Text('Refresh adaptive color'),
+              subtitle: const Text('Generate ulang warna video', style: TextStyle(color: kTextSoft)),
+              onTap: () async {
+                Navigator.pop(sheetContext);
+                if (onRefreshVideoColors != null) await onRefreshVideoColors();
+                if (context.mounted) showSnack(context, 'Adaptive color video dicek ulang.');
+              },
+            ),
+          ListTile(
+            leading: const Icon(Icons.folder_copy_rounded, color: kBlue),
+            title: const Text('Lihat path file'),
+            onTap: () {
+              Navigator.pop(sheetContext);
+              showDialog<void>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Path File'),
+                  content: SelectableText(item.path),
+                  actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Tutup'))],
+                ),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+            title: const Text('Hapus item'),
+            onTap: () {
+              Navigator.pop(sheetContext);
+              confirmDelete(context, store, item);
+            },
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 Future<void> confirmDelete(BuildContext context, VaultStore store, VaultMedia item) async {
