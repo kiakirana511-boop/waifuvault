@@ -16,13 +16,14 @@ void main() {
   runApp(const WaifuVaultApp());
 }
 
-const Color kBg = Color(0xFF080A14);
-const Color kPanel = Color(0xFF111525);
-const Color kPanel2 = Color(0xFF171B2E);
-const Color kPink = Color(0xFFFF4FB8);
-const Color kPurple = Color(0xFF9D5CFF);
-const Color kBlue = Color(0xFF00E5FF);
-const Color kTextSoft = Color(0xFFB8B7D3);
+const Color kBg = Color(0xFF050B1C);
+const Color kPanel = Color(0xFF0B1328);
+const Color kPanel2 = Color(0xFF121C36);
+const Color kPink = Color(0xFFFF8AAF);
+const Color kPurple = Color(0xFFB58CFF);
+const Color kBlue = Color(0xFF89B8FF);
+const Color kTextSoft = Color(0xFFC9C7E6);
+const Color kCosmicGold = Color(0xFFFFD7A3);
 const String kFixedSdImportPath = '/storage/4394-15F8/DCM Waifu';
 const String kPublicInternalVaultPath = '/storage/emulated/0/DCM Waifu';
 const String kPublicInternalCachePath = '/storage/emulated/0/DCM Waifu/.waifuvault_cache';
@@ -352,7 +353,7 @@ class VaultStore extends ChangeNotifier {
 
   Map<String, dynamic> backupPayload() => {
         'app': 'WaifuVault',
-        'version': '1.8.10.1 V8.10.1 Ultra Light Route',
+        'version': '1.9.0 V9 Hoshino Cosmic UI',
         'exportedAt': DateTime.now().toIso8601String(),
         'itemCount': _items.length,
         'items': _items.map((e) => e.toJson()).toList(),
@@ -492,7 +493,7 @@ class _WaifuVaultAppState extends State<WaifuVaultApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'WaifuVault',
+      title: 'Hoshino',
       debugShowCheckedModeBanner: false,
       themeMode: ThemeMode.dark,
       builder: (context, child) {
@@ -541,11 +542,11 @@ class SplashLoadingScreen extends StatelessWidget {
               const VaultLogo(size: 96),
               const SizedBox(height: 24),
               GradientText(
-                'WaifuVault',
-                style: const TextStyle(fontSize: 38, fontWeight: FontWeight.w900),
+                'Hoshino',
+                style: const TextStyle(fontSize: 42, fontWeight: FontWeight.w500, letterSpacing: 1.3),
               ),
               const SizedBox(height: 8),
-              const Text('Simpan. Koleksi. Nikmati.', style: TextStyle(color: kTextSoft)),
+              const Text('✦ Private Waifu Gallery ✦', style: TextStyle(color: kCosmicGold, letterSpacing: 2.4)),
             ],
           ),
         ),
@@ -596,8 +597,8 @@ class _VaultShellState extends State<VaultShell> {
   Widget build(BuildContext context) {
     final pages = [
       RepaintBoundary(child: HomeScreen(store: widget.store)),
-      RepaintBoundary(child: CategoryScreen(store: widget.store)),
-      RepaintBoundary(child: FavoritesScreen(store: widget.store)),
+      RepaintBoundary(child: GalleryScreen(store: widget.store)),
+      RepaintBoundary(child: VoiceScreen(store: widget.store)),
       RepaintBoundary(child: ProfileScreen(store: widget.store)),
     ];
 
@@ -616,38 +617,38 @@ class _VaultShellState extends State<VaultShell> {
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
             child: Container(
-              height: 82,
+              height: 78,
               decoration: BoxDecoration(
-                color: const Color(0xD00D1020),
-                border: Border.all(color: Colors.white12),
+                color: const Color(0xD0081026),
+                border: Border.all(color: Colors.white.withOpacity(0.10)),
                 borderRadius: BorderRadius.circular(28),
                 boxShadow: const [
-                  BoxShadow(color: Color(0x55FF4FB8), blurRadius: 24, offset: Offset(0, 12)),
+                  BoxShadow(color: Color(0x339D5CFF), blurRadius: 24, offset: Offset(0, 12)),
                 ],
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
                   BottomNavButton(
-                    label: 'Beranda',
+                    label: 'Home',
                     icon: Icons.home_rounded,
                     active: index == 0,
                     onTap: () => _goToTab(0),
                   ),
                   BottomNavButton(
-                    label: 'Kategori',
+                    label: 'Gallery',
                     icon: Icons.grid_view_rounded,
                     active: index == 1,
                     onTap: () => _goToTab(1),
                   ),
                   BottomNavButton(
-                    label: 'Koleksi',
-                    icon: Icons.favorite_border_rounded,
+                    label: 'Voice',
+                    icon: Icons.graphic_eq_rounded,
                     active: index == 2,
                     onTap: () => _goToTab(2),
                   ),
                   BottomNavButton(
-                    label: 'Profil',
+                    label: 'Profile',
                     icon: Icons.person_rounded,
                     active: index == 3,
                     onTap: () => _goToTab(3),
@@ -662,6 +663,7 @@ class _VaultShellState extends State<VaultShell> {
   }
 }
 
+
 class HomeScreen extends StatefulWidget {
   final VaultStore store;
   const HomeScreen({super.key, required this.store});
@@ -671,24 +673,17 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  String filter = 'all';
-  String search = '';
-  String sortMode = 'newest';
-  bool selectionMode = false;
   bool startupScanDone = false;
-  final Set<String> selectedIds = <String>{};
 
   @override
   void initState() {
     super.initState();
-    // V8.6: auto-scan beneran setelah Home kebuka, pakai context biar izin SD bisa diminta.
     WidgetsBinding.instance.addPostFrameCallback((_) => runStartupFolderScan());
   }
 
   Future<void> runStartupFolderScan() async {
     if (startupScanDone || !mounted) return;
     startupScanDone = true;
-    // Tunggu store selesai load + UI kebentuk dulu.
     await Future<void>.delayed(const Duration(milliseconds: 900));
     if (!mounted) return;
     final allowed = await ensureStorageAccessForFixedSd(context);
@@ -696,73 +691,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final result = await widget.store.scanManagedFolders(silent: true);
     if (!mounted) return;
     final added = result.internalAdded + result.sdAdded;
-    if (added > 0) {
-      showSnack(context, '$added media otomatis masuk dari DCM Waifu.');
-    }
-  }
-
-  List<VaultMedia> get filteredItems {
-    var list = widget.store.items;
-    if (filter == 'image') list = list.where((e) => e.isImage).toList();
-    if (filter == 'video') list = list.where((e) => e.isVideo).toList();
-    if (filter == 'favorite') list = list.where((e) => e.favorite).toList();
-    if (search.trim().isNotEmpty) {
-      final q = search.toLowerCase().trim();
-      list = list.where((e) => e.title.toLowerCase().contains(q) || e.category.toLowerCase().contains(q)).toList();
-    }
-    final sorted = [...list];
-    switch (sortMode) {
-      case 'oldest':
-        sorted.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-        break;
-      case 'az':
-        sorted.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
-        break;
-      case 'favoriteFirst':
-        sorted.sort((a, b) {
-          if (a.favorite != b.favorite) return a.favorite ? -1 : 1;
-          return b.createdAt.compareTo(a.createdAt);
-        });
-        break;
-      default:
-        sorted.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    }
-    return sorted;
-  }
-
-  void toggleSelect(String id) {
-    setState(() {
-      if (selectedIds.contains(id)) {
-        selectedIds.remove(id);
-      } else {
-        selectedIds.add(id);
-      }
-      selectionMode = selectedIds.isNotEmpty;
-    });
-  }
-
-  void startSelect(String id) {
-    setState(() {
-      selectionMode = true;
-      selectedIds.add(id);
-    });
-  }
-
-  void clearSelection() {
-    setState(() {
-      selectionMode = false;
-      selectedIds.clear();
-    });
-  }
-
-  Future<void> deleteSelected() async {
-    final ids = selectedIds.toList();
-    if (ids.isEmpty) return;
-    final ok = await confirmBulkDelete(context, ids.length);
-    if (ok != true) return;
-    clearSelection();
-    await widget.store.deleteMany(ids);
-    if (mounted) showSnack(context, '${ids.length} item dihapus.');
+    if (added > 0) showSnack(context, '$added media otomatis masuk dari DCM Waifu.');
   }
 
   Future<void> scanAllManagedFoldersFromHome() async {
@@ -783,14 +712,14 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       useSafeArea: true,
       backgroundColor: kPanel,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(26))),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
       builder: (sheetContext) => Padding(
         padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Menu WaifuVault', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+            const Text('Menu Hoshino', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
             const SizedBox(height: 12),
             ListTile(
               leading: const Icon(Icons.add_photo_alternate_rounded, color: kPink),
@@ -823,118 +752,31 @@ class _HomeScreenState extends State<HomeScreen> {
         child: AnimatedBuilder(
           animation: widget.store,
           builder: (context, _) {
-            return CustomScrollView(
-              slivers: [
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(18, 16, 18, 0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SizedBox(
-                          height: 54,
-                          child: Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              Center(
-                                child: GradientText(
-                                  'WaifuVault',
-                                  style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w900),
-                                ),
-                              ),
-                              Positioned(right: 0, top: 6, child: NeonIconButton(icon: Icons.more_vert_rounded, onTap: showHomeMenu)),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        SearchBox(
-                          hint: 'Cari koleksi favoritmu...',
-                          onChanged: (v) => setState(() => search = v),
-                        ),
-                        const SizedBox(height: 14),
-                        SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: [
-                              VaultChip(label: 'Semua', icon: Icons.grid_view_rounded, active: filter == 'all', onTap: () => setState(() => filter = 'all')),
-                              VaultChip(label: 'Foto', icon: Icons.image_rounded, active: filter == 'image', onTap: () => setState(() => filter = 'image')),
-                              VaultChip(label: 'Video', icon: Icons.play_circle_rounded, active: filter == 'video', onTap: () => setState(() => filter = 'video')),
-                              VaultChip(label: 'Favorit', icon: Icons.favorite_rounded, active: filter == 'favorite', onTap: () => setState(() => filter = 'favorite')),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: [
-                              VaultChip(label: 'Terbaru', icon: Icons.schedule_rounded, active: sortMode == 'newest', onTap: () => setState(() => sortMode = 'newest')),
-                              VaultChip(label: 'Terlama', icon: Icons.history_rounded, active: sortMode == 'oldest', onTap: () => setState(() => sortMode = 'oldest')),
-                              VaultChip(label: 'A-Z', icon: Icons.sort_by_alpha_rounded, active: sortMode == 'az', onTap: () => setState(() => sortMode = 'az')),
-                              VaultChip(label: 'Favorit dulu', icon: Icons.favorite_rounded, active: sortMode == 'favoriteFirst', onTap: () => setState(() => sortMode = 'favoriteFirst')),
-                            ],
-                          ),
-                        ),
-                        if (selectionMode) ...[
-                          const SizedBox(height: 12),
-                          SelectionToolbar(
-                            count: selectedIds.length,
-                            total: filteredItems.length,
-                            onCancel: clearSelection,
-                            onSelectAll: () => setState(() {
-                              selectedIds
-                                ..clear()
-                                ..addAll(filteredItems.map((e) => e.id));
-                              selectionMode = selectedIds.isNotEmpty;
-                            }),
-                            onDelete: deleteSelected,
-                          ),
-                        ],
-                        const SizedBox(height: 14),
-                        PremiumDashboard(store: widget.store, items: filteredItems),
-                        const SizedBox(height: 18),
-                      ],
-                    ),
-                  ),
+            final latest = widget.store.items.isNotEmpty ? widget.store.items.first : null;
+            final previewFile = mediaPreviewFile(latest);
+            return ListView(
+              padding: const EdgeInsets.fromLTRB(18, 18, 18, 112),
+              children: [
+                CosmicHeader(title: 'Hoshino', subtitle: '✦  Private Waifu Gallery  ✦', onMenu: showHomeMenu),
+                const SizedBox(height: 18),
+                HomeWelcomeCard(store: widget.store, latest: latest, previewFile: previewFile),
+                const SizedBox(height: 16),
+                const Text('Quick Access', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
+                const SizedBox(height: 10),
+                GridView.count(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  crossAxisCount: 2,
+                  mainAxisSpacing: 10,
+                  crossAxisSpacing: 10,
+                  childAspectRatio: 1.45,
+                  children: [
+                    QuickAccessTile(icon: Icons.image_rounded, label: 'Gallery', color: kPink, onTap: () => DefaultTabController.maybeOf(context)),
+                    QuickAccessTile(icon: Icons.graphic_eq_rounded, label: 'Voice', color: kBlue, onTap: () => showSnack(context, 'Buka tab Voice dari bawah.')),
+                    QuickAccessTile(icon: Icons.favorite_rounded, label: 'Favorites', color: kPink, onTap: () => showSnack(context, '${widget.store.favoriteCount} item favorit.')),
+                    QuickAccessTile(icon: Icons.calendar_month_rounded, label: 'Moments', color: kPurple, onTap: scanAllManagedFoldersFromHome),
+                  ],
                 ),
-                if (filteredItems.isEmpty)
-                  SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: const EmptyState(
-                      title: 'Belum ada media',
-                      subtitle: '',
-                      icon: Icons.add_photo_alternate_rounded,
-                    ),
-                  )
-                else
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(18, 0, 18, 110),
-                    sliver: SliverGrid(
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        mainAxisSpacing: 14,
-                        crossAxisSpacing: 14,
-                        childAspectRatio: 0.72,
-                      ),
-                      delegate: SliverChildBuilderDelegate(
-                        (context, i) {
-                          final item = filteredItems[i];
-                          return AnimatedMediaEntry(
-                            index: i,
-                            child: MediaTile(
-                              item: item,
-                              store: widget.store,
-                              selectionMode: selectionMode,
-                              selected: selectedIds.contains(item.id),
-                              onSelectedTap: () => toggleSelect(item.id),
-                              onLongPress: () => startSelect(item.id),
-                            ),
-                          );
-                        },
-                        childCount: filteredItems.length,
-                      ),
-                    ),
-                  ),
               ],
             );
           },
@@ -943,6 +785,430 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
+
+File? mediaPreviewFile(VaultMedia? item) {
+  if (item == null) return null;
+  final path = item.isImage ? item.path : item.thumbnailPath;
+  if (path == null) return null;
+  final file = File(path);
+  return file.existsSync() ? file : null;
+}
+
+class CosmicHeader extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final VoidCallback? onMenu;
+  final bool showBack;
+  const CosmicHeader({super.key, required this.title, required this.subtitle, this.onMenu, this.showBack = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 92,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          if (showBack)
+            Positioned(left: 0, top: 18, child: NeonIconButton(icon: Icons.arrow_back_rounded, onTap: () => Navigator.pop(context))),
+          Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                GradientText(title, style: const TextStyle(fontSize: 48, fontWeight: FontWeight.w500, letterSpacing: 1.2)),
+                const SizedBox(height: 4),
+                Text(subtitle, style: const TextStyle(color: kCosmicGold, fontSize: 12, letterSpacing: 2.8, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+          if (onMenu != null) Positioned(right: 0, top: 20, child: NeonIconButton(icon: Icons.more_vert_rounded, onTap: onMenu!)),
+        ],
+      ),
+    );
+  }
+}
+
+class HomeWelcomeCard extends StatelessWidget {
+  final VaultStore store;
+  final VaultMedia? latest;
+  final File? previewFile;
+  const HomeWelcomeCard({super.key, required this.store, required this.latest, required this.previewFile});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 390,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(32),
+        border: Border.all(color: Colors.white.withOpacity(0.16)),
+        boxShadow: const [BoxShadow(color: Color(0x44779BFF), blurRadius: 32, offset: Offset(0, 18))],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (previewFile != null)
+            Image.file(previewFile!, fit: BoxFit.cover)
+          else
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFF132044), Color(0xFF171A38), Color(0xFF090F22)],
+                ),
+              ),
+            ),
+          const Positioned.fill(child: CustomPaint(painter: MiniStarPainter())),
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.black.withOpacity(0.05), Colors.black.withOpacity(0.15), Colors.black.withOpacity(0.82)],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 18,
+            top: 18,
+            right: 18,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Welcome back,', style: TextStyle(color: Colors.white.withOpacity(.86), fontSize: 14)),
+                      const SizedBox(height: 2),
+                      const Row(
+                        children: [
+                          Text('Sensei', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w500, color: Colors.white, letterSpacing: .5)),
+                          SizedBox(width: 8),
+                          Icon(Icons.favorite_rounded, size: 18, color: kPink),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text('Hoshino is happy to see you again.', style: TextStyle(color: Colors.white.withOpacity(.70), fontSize: 13)),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.notifications_none_rounded, color: kPink),
+              ],
+            ),
+          ),
+          Positioned(
+            left: 18,
+            right: 18,
+            bottom: 18,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(latest == null ? 'Good evening, Sensei.' : displayMediaTitle(latest!),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 22, color: Colors.white, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 4),
+                Text('${store.items.length} saved moments • ${store.favoriteCount} favorites', style: TextStyle(color: Colors.white.withOpacity(.72))),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class QuickAccessTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+  const QuickAccessTile({super.key, required this.icon, required this.label, required this.color, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(22),
+      onTap: onTap,
+      child: GlassPanel(
+        padding: const EdgeInsets.all(12),
+        borderColor: color.withOpacity(.28),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: color, size: 30),
+            const SizedBox(height: 8),
+            Text(label, style: const TextStyle(fontWeight: FontWeight.w800, color: Colors.white)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class GalleryScreen extends StatefulWidget {
+  final VaultStore store;
+  const GalleryScreen({super.key, required this.store});
+
+  @override
+  State<GalleryScreen> createState() => _GalleryScreenState();
+}
+
+class _GalleryScreenState extends State<GalleryScreen> {
+  String filter = 'all';
+  String search = '';
+  bool selectionMode = false;
+  final Set<String> selectedIds = <String>{};
+
+  List<VaultMedia> get filteredItems {
+    var list = widget.store.items;
+    if (filter == 'image') list = list.where((e) => e.isImage).toList();
+    if (filter == 'video') list = list.where((e) => e.isVideo).toList();
+    if (filter == 'favorite') list = list.where((e) => e.favorite).toList();
+    if (search.trim().isNotEmpty) {
+      final q = search.toLowerCase().trim();
+      list = list.where((e) => e.title.toLowerCase().contains(q) || e.category.toLowerCase().contains(q)).toList();
+    }
+    return [...list]..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  }
+
+  void toggleSelect(String id) {
+    setState(() {
+      if (selectedIds.contains(id)) {
+        selectedIds.remove(id);
+      } else {
+        selectedIds.add(id);
+      }
+      selectionMode = selectedIds.isNotEmpty;
+    });
+  }
+
+  void startSelect(String id) {
+    setState(() {
+      selectionMode = true;
+      selectedIds.add(id);
+    });
+  }
+
+  void clearSelection() => setState(() { selectionMode = false; selectedIds.clear(); });
+
+  Future<void> deleteSelected() async {
+    final ids = selectedIds.toList();
+    if (ids.isEmpty) return;
+    final ok = await confirmBulkDelete(context, ids.length);
+    if (ok != true) return;
+    clearSelection();
+    await widget.store.deleteMany(ids);
+    if (mounted) showSnack(context, '${ids.length} item dihapus.');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return NeonBackground(
+      child: SafeArea(
+        child: AnimatedBuilder(
+          animation: widget.store,
+          builder: (context, _) => CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Center(child: Text('Gallery', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w500, color: Colors.white, letterSpacing: .6))),
+                      const SizedBox(height: 14),
+                      SearchBox(hint: 'Search memories...', onChanged: (v) => setState(() => search = v)),
+                      const SizedBox(height: 14),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(children: [
+                          VaultChip(label: 'All', icon: Icons.favorite_rounded, active: filter == 'all', onTap: () => setState(() => filter = 'all')),
+                          VaultChip(label: 'Cute', icon: Icons.auto_awesome_rounded, active: false, onTap: () => setState(() => filter = 'all')),
+                          VaultChip(label: 'Wallpaper', icon: Icons.wallpaper_rounded, active: false, onTap: () => setState(() => filter = 'image')),
+                          VaultChip(label: 'Live', icon: Icons.play_circle_rounded, active: filter == 'video', onTap: () => setState(() => filter = 'video')),
+                          VaultChip(label: 'Favorite', icon: Icons.favorite_rounded, active: filter == 'favorite', onTap: () => setState(() => filter = 'favorite')),
+                        ]),
+                      ),
+                      if (selectionMode) ...[
+                        const SizedBox(height: 12),
+                        SelectionToolbar(
+                          count: selectedIds.length,
+                          total: filteredItems.length,
+                          onCancel: clearSelection,
+                          onSelectAll: () => setState(() { selectedIds..clear()..addAll(filteredItems.map((e) => e.id)); selectionMode = selectedIds.isNotEmpty; }),
+                          onDelete: deleteSelected,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              if (filteredItems.isEmpty)
+                const SliverFillRemaining(hasScrollBody: false, child: EmptyState(title: 'Gallery kosong', subtitle: '', icon: Icons.image_rounded))
+              else
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(18, 0, 18, 110),
+                  sliver: SliverGrid(
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      mainAxisSpacing: 12,
+                      crossAxisSpacing: 12,
+                      childAspectRatio: 0.68,
+                    ),
+                    delegate: SliverChildBuilderDelegate((context, i) {
+                      final item = filteredItems[i];
+                      return AnimatedMediaEntry(
+                        index: i,
+                        child: MediaTile(
+                          item: item,
+                          store: widget.store,
+                          selectionMode: selectionMode,
+                          selected: selectedIds.contains(item.id),
+                          onSelectedTap: () => toggleSelect(item.id),
+                          onLongPress: () => startSelect(item.id),
+                        ),
+                      );
+                    }, childCount: filteredItems.length),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class VoiceScreen extends StatelessWidget {
+  final VaultStore store;
+  const VoiceScreen({super.key, required this.store});
+
+  @override
+  Widget build(BuildContext context) {
+    final latest = store.items.isNotEmpty ? store.items.first : null;
+    final avatar = mediaPreviewFile(latest);
+    return NeonBackground(
+      child: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 110),
+          children: [
+            const Center(child: Text('Voice', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w500, color: Colors.white, letterSpacing: .6))),
+            const SizedBox(height: 20),
+            Center(
+              child: Stack(
+                alignment: Alignment.bottomRight,
+                children: [
+                  Container(
+                    width: 170,
+                    height: 170,
+                    decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: kBlue.withOpacity(.55), width: 2), boxShadow: const [BoxShadow(color: Color(0x6689B8FF), blurRadius: 38)]),
+                    clipBehavior: Clip.antiAlias,
+                    child: avatar != null ? Image.file(avatar, fit: BoxFit.cover) : const DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(colors: [kPink, kBlue])), child: Icon(Icons.graphic_eq_rounded, size: 68)),
+                  ),
+                  Container(width: 52, height: 52, decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [kPink, kBlue])), child: const Icon(Icons.favorite_rounded, color: Colors.white)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            Center(child: GradientText('Hoshino', style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w500))),
+            const Center(child: Text('Voice Collection', style: TextStyle(color: kTextSoft))),
+            const SizedBox(height: 18),
+            Row(mainAxisAlignment: MainAxisAlignment.center, children: const [
+              SmallVoiceChip(label: 'Greeting', active: true),
+              SmallVoiceChip(label: 'Cute'),
+              SmallVoiceChip(label: 'Sleep'),
+              SmallVoiceChip(label: 'Custom'),
+            ]),
+            const SizedBox(height: 18),
+            GlassPanel(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                children: const [
+                  FakeWaveform(),
+                  SizedBox(height: 12),
+                  Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    Icon(Icons.skip_previous_rounded, size: 36, color: Colors.white),
+                    SizedBox(width: 22),
+                    CirclePlayButton(),
+                    SizedBox(width: 22),
+                    Icon(Icons.skip_next_rounded, size: 36, color: Colors.white),
+                  ]),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            const VoiceLineTile(text: 'Good morning, Sensei.', time: '00:12'),
+            const VoiceLineTile(text: 'You did great today!', time: '00:10'),
+            const VoiceLineTile(text: 'Need a little break?', time: '00:11'),
+            const VoiceLineTile(text: 'Sweet dreams, Sensei.', time: '00:13'),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class SmallVoiceChip extends StatelessWidget {
+  final String label;
+  final bool active;
+  const SmallVoiceChip({super.key, required this.label, this.active = false});
+  @override
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.symmetric(horizontal: 4),
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+    decoration: BoxDecoration(borderRadius: BorderRadius.circular(999), color: active ? kPink : Colors.white.withOpacity(.07), border: Border.all(color: active ? kPink : Colors.white12)),
+    child: Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: active ? Colors.white : kTextSoft)),
+  );
+}
+
+class FakeWaveform extends StatelessWidget {
+  const FakeWaveform({super.key});
+  @override
+  Widget build(BuildContext context) => SizedBox(height: 74, child: CustomPaint(painter: WavePainter()));
+}
+
+class WavePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..strokeCap = StrokeCap.round..strokeWidth = 3;
+    for (int i = 0; i < 36; i++) {
+      final x = i * (size.width / 35);
+      final h = 12 + ((i * 17) % 35).toDouble();
+      paint.color = Color.lerp(kBlue, kPink, i / 35)!.withOpacity(.9);
+      canvas.drawLine(Offset(x, size.height / 2 - h / 2), Offset(x, size.height / 2 + h / 2), paint);
+    }
+  }
+  @override bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class CirclePlayButton extends StatelessWidget {
+  const CirclePlayButton({super.key});
+  @override
+  Widget build(BuildContext context) => Container(width: 62, height: 62, decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [kPink, kPurple])), child: const Icon(Icons.play_arrow_rounded, size: 38, color: Colors.white));
+}
+
+class VoiceLineTile extends StatelessWidget {
+  final String text;
+  final String time;
+  const VoiceLineTile({super.key, required this.text, required this.time});
+  @override
+  Widget build(BuildContext context) => GlassPanel(
+    margin: const EdgeInsets.only(bottom: 8),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    child: Row(children: [
+      const Icon(Icons.play_circle_outline_rounded, color: kPink),
+      const SizedBox(width: 10),
+      Expanded(child: Text(text, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600))),
+      Text(time, style: const TextStyle(color: kTextSoft, fontSize: 12)),
+      const SizedBox(width: 8),
+      const Icon(Icons.favorite_border_rounded, color: kTextSoft, size: 18),
+    ]),
+  );
+}
+
 
 
 class PremiumDashboard extends StatelessWidget {
@@ -960,89 +1226,144 @@ class PremiumDashboard extends StatelessWidget {
             : latest.thumbnailPath == null
                 ? null
                 : File(latest.thumbnailPath!);
-    final accent = Color(latest?.accentColor ?? kPurple.value);
+    final accent = Color(latest?.accentColor ?? kPink.value);
 
     return Column(
       children: [
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(16),
+          height: 318,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(28),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [accent.withOpacity(0.38), kPanel.withOpacity(0.94), kBg.withOpacity(0.96)],
-            ),
-            border: Border.all(color: accent.withOpacity(0.38)),
-            boxShadow: [BoxShadow(color: accent.withOpacity(0.20), blurRadius: 26, offset: const Offset(0, 14))],
+            borderRadius: BorderRadius.circular(30),
+            border: Border.all(color: Colors.white.withOpacity(0.16)),
+            boxShadow: [
+              BoxShadow(color: accent.withOpacity(0.24), blurRadius: 34, offset: const Offset(0, 18)),
+              BoxShadow(color: kBlue.withOpacity(0.08), blurRadius: 44, offset: const Offset(0, -8)),
+            ],
           ),
-          child: Row(
+          clipBehavior: Clip.antiAlias,
+          child: Stack(
+            fit: StackFit.expand,
             children: [
-              Expanded(
+              if (latestImage != null && latestImage.existsSync())
+                Image.file(latestImage, fit: BoxFit.cover)
+              else
+                const DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFF111D3D), Color(0xFF1B1735), Color(0xFF090E20)],
+                    ),
+                  ),
+                ),
+              const Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Color(0x22000000), Color(0x18000000), Color(0xCC000000)],
+                    ),
+                  ),
+                ),
+              ),
+              const Positioned.fill(child: CustomPaint(painter: MiniStarPainter())),
+              Positioned(
+                left: 20,
+                top: 18,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
+                    Text('Welcome back,', style: TextStyle(color: Colors.white.withOpacity(0.82), fontSize: 14)),
+                    const SizedBox(height: 2),
+                    const Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(999),
-                            color: Colors.white.withOpacity(0.09),
-                            border: Border.all(color: Colors.white12),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.bolt_rounded, size: 16, color: kBlue),
-                              SizedBox(width: 5),
-                              Text('V8.10.1 Ultra Light', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900)),
-                            ],
-                          ),
-                        ),
+                        Text('Sensei', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w500, color: Colors.white, letterSpacing: 0.4)),
+                        SizedBox(width: 8),
+                        Icon(Icons.favorite_rounded, size: 18, color: kPink),
                       ],
                     ),
-                    const SizedBox(height: 12),
-                    const Text('Galeri anime pribadi dengan glow adaptif.', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
-                    const SizedBox(height: 6),
-                    Text('${store.items.length} item • ${store.favoriteCount} favorit • ${store.videoCount} video', style: const TextStyle(color: kTextSoft)),
+                    const SizedBox(height: 2),
+                    Text('Koleksi Hoshino siap dibuka lagi.', style: TextStyle(color: Colors.white.withOpacity(0.72), fontSize: 13)),
                   ],
                 ),
               ),
-              const SizedBox(width: 14),
-              Container(
-                width: 86,
-                height: 102,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: Colors.white24),
-                  boxShadow: [BoxShadow(color: accent.withOpacity(0.35), blurRadius: 22)],
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: latestImage != null && latestImage.existsSync()
-                    ? Image.file(latestImage, fit: BoxFit.cover)
-                    : const DecoratedBox(
-                        decoration: BoxDecoration(gradient: LinearGradient(colors: [kPurple, kPink, kBlue])),
-                        child: Icon(Icons.auto_awesome_rounded, size: 42),
+              Positioned(
+                left: 20,
+                right: 20,
+                bottom: 18,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: kPink.withOpacity(0.20),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(color: kPink.withOpacity(0.45)),
                       ),
+                      child: const Text('V9.1 REFERENCE UI', style: TextStyle(fontSize: 11, letterSpacing: 1.3, fontWeight: FontWeight.w900, color: Colors.white)),
+                    ),
+                    const SizedBox(height: 9),
+                    Text(
+                      latest == null ? 'Good evening, Sensei.' : displayMediaTitle(latest),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Colors.white),
+                    ),
+                    const SizedBox(height: 3),
+                    Text('${store.items.length} item • ${store.favoriteCount} favorit • ${store.videoCount} video', style: TextStyle(color: Colors.white.withOpacity(0.72))),
+                  ],
+                ),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 14),
         Row(
           children: [
-            Expanded(child: DashboardStat(icon: Icons.image_rounded, label: 'Foto', value: '${store.imageCount}', color: kPink)),
+            Expanded(child: DashboardStat(icon: Icons.image_rounded, label: 'Gallery', value: '${store.imageCount}', color: kPink)),
             const SizedBox(width: 10),
-            Expanded(child: DashboardStat(icon: Icons.play_circle_rounded, label: 'Video', value: '${store.videoCount}', color: kBlue)),
+            Expanded(child: DashboardStat(icon: Icons.graphic_eq_rounded, label: 'Video', value: '${store.videoCount}', color: kBlue)),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(child: DashboardStat(icon: Icons.favorite_rounded, label: 'Favorite', value: '${store.favoriteCount}', color: kPink)),
             const SizedBox(width: 10),
-            Expanded(child: DashboardStat(icon: Icons.favorite_rounded, label: 'Favorit', value: '${store.favoriteCount}', color: kPurple)),
+            Expanded(child: DashboardStat(icon: Icons.auto_awesome_rounded, label: 'Moments', value: '${store.items.length}', color: kCosmicGold)),
           ],
         ),
       ],
     );
   }
+}
+
+class MiniStarPainter extends CustomPainter {
+  const MiniStarPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = Colors.white.withOpacity(0.8);
+    final points = <Offset>[
+      Offset(size.width * .18, size.height * .22),
+      Offset(size.width * .76, size.height * .18),
+      Offset(size.width * .88, size.height * .42),
+      Offset(size.width * .34, size.height * .58),
+      Offset(size.width * .63, size.height * .78),
+    ];
+    for (final point in points) {
+      canvas.drawCircle(point, 1.2, paint);
+      canvas.drawLine(Offset(point.dx - 4, point.dy), Offset(point.dx + 4, point.dy), paint..strokeWidth = .75);
+      canvas.drawLine(Offset(point.dx, point.dy - 4), Offset(point.dx, point.dy + 4), paint..strokeWidth = .75);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class DashboardStat extends StatelessWidget {
@@ -1055,18 +1376,25 @@ class DashboardStat extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      height: 92,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        color: Colors.white.withOpacity(0.055),
-        border: Border.all(color: color.withOpacity(0.28)),
+        borderRadius: BorderRadius.circular(22),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Colors.white.withOpacity(0.085), color.withOpacity(0.08), Colors.white.withOpacity(0.035)],
+        ),
+        border: Border.all(color: color.withOpacity(0.30)),
+        boxShadow: [BoxShadow(color: color.withOpacity(0.11), blurRadius: 20, offset: const Offset(0, 10))],
       ),
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: color, size: 21),
-          const SizedBox(height: 5),
-          Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
-          Text(label, style: const TextStyle(fontSize: 11, color: kTextSoft)),
+          Icon(icon, color: color, size: 25),
+          const SizedBox(height: 6),
+          Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.white)),
+          Text(label, style: const TextStyle(fontSize: 11, color: kTextSoft, letterSpacing: .4)),
         ],
       ),
     );
@@ -1232,20 +1560,10 @@ class FavoritesScreen extends StatelessWidget {
   }
 }
 
+
 class ProfileScreen extends StatelessWidget {
   final VaultStore store;
   const ProfileScreen({super.key, required this.store});
-
-  Future<void> togglePrivate(BuildContext context, bool value) async {
-    if (!value) {
-      await store.setPrivateMode(false);
-      return;
-    }
-    final ok = await Navigator.push<bool>(context, smoothPageRoute<bool>(const PrivatePinScreen()));
-    if (ok == true) {
-      await store.setPrivateMode(true);
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -1254,64 +1572,81 @@ class ProfileScreen extends StatelessWidget {
         child: AnimatedBuilder(
           animation: store,
           builder: (context, _) {
+            final latest = store.items.isNotEmpty ? store.items.first : null;
+            final avatar = mediaPreviewFile(latest);
             return ListView(
               padding: const EdgeInsets.fromLTRB(18, 18, 18, 110),
               children: [
+                const Center(child: Text('Profile', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w500, color: Colors.white, letterSpacing: .6))),
+                const SizedBox(height: 18),
                 GlassPanel(
-                  padding: const EdgeInsets.all(18),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
                     children: [
-                      Row(
-                        children: [
-                          Container(
-                            width: 76,
-                            height: 76,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: const LinearGradient(colors: [kPink, kBlue]),
-                              border: Border.all(color: Colors.white24),
-                            ),
-                            child: const Icon(Icons.favorite_rounded, color: Colors.white, size: 38),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                GradientText('WaifuLover', style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900)),
-                                const SizedBox(height: 4),
-                                const Text('Premium Member', style: TextStyle(color: kPink, fontWeight: FontWeight.bold)),
-                              ],
-                            ),
-                          ),
-                          const ProBadge(),
-                        ],
+                      Container(
+                        width: 124,
+                        height: 124,
+                        decoration: BoxDecoration(borderRadius: BorderRadius.circular(22), border: Border.all(color: kPink.withOpacity(.35))),
+                        clipBehavior: Clip.antiAlias,
+                        child: avatar != null ? Image.file(avatar, fit: BoxFit.cover) : const DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(colors: [kPink, kBlue])), child: Icon(Icons.favorite_rounded, size: 48)),
                       ),
-                      const SizedBox(height: 20),
-                      const Text('Penyimpanan', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                      const SizedBox(height: 10),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(999),
-                        child: LinearProgressIndicator(
-                          value: (store.items.length / 200).clamp(0.02, 1.0),
-                          minHeight: 10,
-                          backgroundColor: Colors.white10,
-                          color: kPink,
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: const [
+                            Text('Hoshino ✦', style: TextStyle(fontSize: 25, fontWeight: FontWeight.w600, color: Colors.white)),
+                            SizedBox(height: 5),
+                            Text('Your devoted companion', style: TextStyle(color: kTextSoft)),
+                            SizedBox(height: 12),
+                            Text('Birthday', style: TextStyle(color: kTextSoft, fontSize: 12)),
+                            Text('March 14', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                            SizedBox(height: 8),
+                            Text('Theme', style: TextStyle(color: kTextSoft, fontSize: 12)),
+                            Text('Cosmic Pink', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Text('${store.items.length} item tersimpan • ${store.imageCount} foto • ${store.videoCount} video', style: const TextStyle(color: kTextSoft)),
                     ],
                   ),
                 ),
-                const SizedBox(height: 16),
-                SettingsTile(icon: Icons.palette_rounded, title: 'Tema', subtitle: 'Adaptive Dynamic', trailing: Icons.chevron_right_rounded),
-                SettingsTile(icon: Icons.language_rounded, title: 'Bahasa', subtitle: 'Indonesia', trailing: Icons.chevron_right_rounded),
-                SettingsTile(icon: Icons.storage_rounded, title: 'Storage Mode', subtitle: 'Internal / SD public path + backup JSON', trailing: Icons.chevron_right_rounded, onTap: () => Navigator.push(context, smoothPageRoute(StorageModeScreen(store: store)))),
-                SettingsTile(icon: Icons.cloud_upload_rounded, title: 'Backup & Ekspor', subtitle: 'Buat file backup koleksi', trailing: Icons.chevron_right_rounded, onTap: () => Navigator.push(context, smoothPageRoute(StorageModeScreen(store: store)))),
-                SettingsTile(icon: Icons.lock_rounded, title: 'Mode Privat', subtitle: 'Dilewati dulu; bisa lanjut V6 nanti', trailing: Icons.lock_outline_rounded),
-                SettingsTile(icon: Icons.info_rounded, title: 'Tentang WaifuVault', subtitle: 'v1.8.10+28 V8.10.1 Ultra Light', trailing: Icons.chevron_right_rounded),
+                const SizedBox(height: 14),
+                GlassPanel(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: const [
+                        Text('Bond Level', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white)),
+                        Spacer(),
+                        Icon(Icons.favorite_rounded, color: kPink, size: 38),
+                      ]),
+                      const SizedBox(height: 4),
+                      const Text('Lv. 28', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 10),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(999),
+                        child: LinearProgressIndicator(value: .78, minHeight: 10, backgroundColor: Colors.white10, color: kPink),
+                      ),
+                      const SizedBox(height: 6),
+                      const Align(alignment: Alignment.centerRight, child: Text('7,860 / 10,000', style: TextStyle(color: kTextSoft, fontSize: 12))),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Row(children: [
+                  Expanded(child: ProfileMiniStat(icon: Icons.image_rounded, label: 'Saved Photos', value: '${store.imageCount}')),
+                  const SizedBox(width: 10),
+                  Expanded(child: ProfileMiniStat(icon: Icons.graphic_eq_rounded, label: 'Favorite Voice', value: '48')),
+                  const SizedBox(width: 10),
+                  Expanded(child: ProfileMiniStat(icon: Icons.favorite_rounded, label: 'Favorites', value: '${store.favoriteCount}')),
+                ]),
+                const SizedBox(height: 14),
+                SettingsTile(icon: Icons.color_lens_rounded, title: 'Theme Color', subtitle: 'Pink / Blue', trailing: Icons.chevron_right_rounded),
+                SettingsTile(icon: Icons.storage_rounded, title: 'Storage Mode', subtitle: 'Internal + SD DCM Waifu', trailing: Icons.chevron_right_rounded, onTap: () => Navigator.push(context, smoothPageRoute(StorageModeScreen(store: store)))),
+                SettingsTile(icon: Icons.cloud_upload_rounded, title: 'Backup & Sync', subtitle: 'Backup JSON koleksi', trailing: Icons.chevron_right_rounded, onTap: () => Navigator.push(context, smoothPageRoute(StorageModeScreen(store: store)))),
+                SettingsTile(icon: Icons.lock_rounded, title: 'App Lock', subtitle: 'Off', trailing: Icons.chevron_right_rounded),
+                SettingsTile(icon: Icons.info_rounded, title: 'About', subtitle: 'v2.0.0+30 V9.1 Full Reference UI', trailing: Icons.chevron_right_rounded),
               ],
             );
           },
@@ -1320,6 +1655,25 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 }
+
+class ProfileMiniStat extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  const ProfileMiniStat({super.key, required this.icon, required this.label, required this.value});
+  @override
+  Widget build(BuildContext context) => GlassPanel(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
+    child: Column(children: [
+      Icon(icon, color: kPink, size: 24),
+      const SizedBox(height: 7),
+      Text(value, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 17)),
+      const SizedBox(height: 2),
+      Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: kTextSoft, fontSize: 10)),
+    ]),
+  );
+}
+
 
 
 
@@ -2567,7 +2921,7 @@ class _SdCardPathScreenState extends State<SdCardPathScreen> {
                 padding: const EdgeInsets.all(16),
                 borderColor: kPurple.withOpacity(0.35),
                 child: const Text(
-                  'V8.10.1: transisi menu Profil/Storage dibuat ultra ringan, tab tetap smooth, auto-scan DCM Waifu tetap jalan.',
+                  'V9: tampilan diubah ke gaya Hoshino cosmic gallery, tetap pakai storage public DCM Waifu dan auto-scan.',
                   style: TextStyle(color: kTextSoft, height: 1.35),
                 ),
               ),
@@ -2895,12 +3249,12 @@ class MediaTile extends StatelessWidget {
         color: Colors.transparent,
         child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: accent.withOpacity(0.55), width: 1.1),
-          boxShadow: [BoxShadow(color: accent.withOpacity(0.18), blurRadius: 14)],
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.white.withOpacity(0.12), width: 1.0),
+          boxShadow: [BoxShadow(color: accent.withOpacity(0.18), blurRadius: 18, offset: const Offset(0, 10))],
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(17),
+          borderRadius: BorderRadius.circular(21),
           child: Stack(
             fit: StackFit.expand,
             children: [
@@ -3255,26 +3609,58 @@ class NeonBackground extends StatelessWidget {
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        Container(color: kBg),
-        Positioned(
-          top: -90,
-          left: -80,
-          child: NeonOrb(color: kPurple.withOpacity(0.42), size: 260),
+        const DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFF07112A), Color(0xFF060B1B), Color(0xFF030712)],
+            ),
+          ),
+          child: SizedBox.expand(),
         ),
+        const Positioned.fill(child: CustomPaint(painter: CosmicStarField())),
+        Positioned(top: -90, left: -120, child: NeonOrb(color: kPurple.withOpacity(0.28), size: 300)),
+        Positioned(top: 180, right: -120, child: NeonOrb(color: kBlue.withOpacity(0.20), size: 310)),
+        Positioned(bottom: -150, left: 20, child: NeonOrb(color: kPink.withOpacity(0.23), size: 300)),
         Positioned(
-          top: 120,
-          right: -100,
-          child: NeonOrb(color: kBlue.withOpacity(0.22), size: 280),
-        ),
-        Positioned(
-          bottom: -130,
-          left: 40,
-          child: NeonOrb(color: kPink.withOpacity(0.28), size: 260),
+          top: 68,
+          left: -40,
+          right: -40,
+          child: IgnorePointer(
+            child: Container(height: 120, decoration: BoxDecoration(border: Border(top: BorderSide(color: kPink.withOpacity(0.08))))),
+          ),
         ),
         child,
       ],
     );
   }
+}
+
+class CosmicStarField extends CustomPainter {
+  const CosmicStarField();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final starPaint = Paint()..color = Colors.white.withOpacity(0.55);
+    final bluePaint = Paint()..color = kBlue.withOpacity(0.35);
+    final pinkPaint = Paint()..color = kPink.withOpacity(0.34);
+    final stars = <Offset>[
+      Offset(size.width * .10, size.height * .08), Offset(size.width * .23, size.height * .15), Offset(size.width * .42, size.height * .10), Offset(size.width * .71, size.height * .13),
+      Offset(size.width * .87, size.height * .07), Offset(size.width * .18, size.height * .35), Offset(size.width * .76, size.height * .31), Offset(size.width * .91, size.height * .48),
+      Offset(size.width * .34, size.height * .64), Offset(size.width * .62, size.height * .72), Offset(size.width * .15, size.height * .83), Offset(size.width * .82, size.height * .88),
+    ];
+    for (final point in stars) { canvas.drawCircle(point, 1.0, starPaint); }
+    final orbit = Paint()..style = PaintingStyle.stroke..strokeWidth = 0.8..color = kPink.withOpacity(0.12);
+    canvas.drawOval(Rect.fromLTWH(-80, size.height * .05, size.width + 180, 170), orbit);
+    orbit.color = kBlue.withOpacity(0.10);
+    canvas.drawOval(Rect.fromLTWH(size.width * .35, size.height * .62, size.width * .75, 140), orbit);
+    canvas.drawCircle(Offset(size.width * .08, size.height * .22), 1.7, pinkPaint);
+    canvas.drawCircle(Offset(size.width * .90, size.height * .24), 1.7, bluePaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class NeonOrb extends StatelessWidget {
@@ -3335,7 +3721,7 @@ class GradientText extends StatelessWidget {
   Widget build(BuildContext context) {
     return ShaderMask(
       blendMode: BlendMode.srcIn,
-      shaderCallback: (bounds) => const LinearGradient(colors: [Colors.white, kPurple, kPink, kBlue]).createShader(bounds),
+      shaderCallback: (bounds) => const LinearGradient(colors: [Colors.white, Color(0xFFFFD7E5), kPink, kBlue]).createShader(bounds),
       child: Text(text, style: style.copyWith(decoration: TextDecoration.none)),
     );
   }
@@ -3416,24 +3802,25 @@ class VaultChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(right: 10),
+      padding: const EdgeInsets.only(right: 9),
       child: GestureDetector(
         onTap: onTap,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(999),
-            gradient: active ? const LinearGradient(colors: [kPink, kPurple]) : null,
-            color: active ? null : Colors.white.withOpacity(0.06),
-            border: Border.all(color: active ? Colors.white24 : Colors.white10),
+            gradient: active ? const LinearGradient(colors: [kPink, Color(0xFFFFA3BC)]) : null,
+            color: active ? null : Colors.white.withOpacity(0.055),
+            border: Border.all(color: active ? Colors.white.withOpacity(0.26) : Colors.white.withOpacity(0.10)),
+            boxShadow: active ? [BoxShadow(color: kPink.withOpacity(0.28), blurRadius: 18, offset: const Offset(0, 8))] : null,
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 18),
-              const SizedBox(width: 8),
-              Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+              Icon(icon, size: 16, color: active ? Colors.white : kTextSoft),
+              const SizedBox(width: 7),
+              Text(label, style: TextStyle(fontWeight: FontWeight.w800, color: active ? Colors.white : kTextSoft, fontSize: 13)),
             ],
           ),
         ),
@@ -3451,13 +3838,18 @@ class SearchBox extends StatelessWidget {
   Widget build(BuildContext context) {
     return TextField(
       onChanged: onChanged,
+      style: const TextStyle(color: Colors.white),
       decoration: InputDecoration(
         hintText: hint,
-        prefixIcon: const Icon(Icons.search_rounded),
-        suffixIcon: const Icon(Icons.tune_rounded),
+        hintStyle: TextStyle(color: kTextSoft.withOpacity(0.76)),
+        prefixIcon: const Icon(Icons.search_rounded, color: kTextSoft),
+        suffixIcon: const Icon(Icons.tune_rounded, color: kTextSoft),
         filled: true,
-        fillColor: Colors.white.withOpacity(0.06),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide.none),
+        fillColor: Colors.white.withOpacity(0.055),
+        contentPadding: const EdgeInsets.symmetric(vertical: 16),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(22), borderSide: BorderSide.none),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(22), borderSide: BorderSide(color: Colors.white.withOpacity(0.06))),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(22), borderSide: BorderSide(color: kPink.withOpacity(0.45))),
       ),
     );
   }
@@ -3473,14 +3865,15 @@ class NeonIconButton extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 44,
-        height: 44,
+        width: 50,
+        height: 50,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          color: Colors.white.withOpacity(0.07),
-          border: Border.all(color: Colors.white12),
+          borderRadius: BorderRadius.circular(20),
+          color: Colors.white.withOpacity(0.055),
+          border: Border.all(color: Colors.white.withOpacity(0.12)),
+          boxShadow: [BoxShadow(color: kPink.withOpacity(0.13), blurRadius: 18, offset: const Offset(0, 8))],
         ),
-        child: Icon(icon),
+        child: Icon(icon, color: Colors.white.withOpacity(0.88)),
       ),
     );
   }
@@ -3490,75 +3883,7 @@ class ProBadge extends StatelessWidget {
   const ProBadge({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.orangeAccent.withOpacity(0.6)),
-        color: Colors.orange.withOpacity(0.09),
-      ),
-      child: const Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.workspace_premium_rounded, color: Colors.orangeAccent, size: 17),
-          SizedBox(width: 5),
-          Text('Pro', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orangeAccent)),
-        ],
-      ),
-    );
-  }
-}
-
-class ActionPill extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color? color;
-  final VoidCallback onTap;
-  const ActionPill({super.key, required this.icon, required this.label, required this.onTap, this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    final c = color ?? Colors.white;
-    return InkWell(
-      onTap: onTap,
-      child: Column(
-        children: [
-          Icon(icon, color: c, size: 24),
-          const SizedBox(height: 6),
-          Text(label, style: TextStyle(color: c.withOpacity(0.9), fontSize: 11)),
-        ],
-      ),
-    );
-  }
-}
-
-class SmallInfoButton extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-  const SmallInfoButton({super.key, required this.label, required this.value, required this.icon});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        color: Colors.white.withOpacity(0.05),
-        border: Border.all(color: Colors.white10),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, size: 20, color: kBlue),
-          const SizedBox(height: 4),
-          Text(label, style: const TextStyle(fontSize: 12, color: kTextSoft)),
-          const SizedBox(height: 2),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => const SizedBox.shrink();
 }
 
 class SettingsTile extends StatelessWidget {
