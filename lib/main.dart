@@ -184,7 +184,7 @@ class VaultStore extends ChangeNotifier {
     loaded = true;
     notifyListeners();
 
-    // V8.5: auto-scan folder publik setelah app kebuka.
+    // V8.5.1: auto-scan folder publik setelah app kebuka.
     // Jadi file yang ditaruh manual di DCM Waifu bisa muncul tanpa import picker.
     Future.microtask(() async {
       await scanManagedFolders(silent: true);
@@ -318,7 +318,7 @@ class VaultStore extends ChangeNotifier {
 
   Map<String, dynamic> backupPayload() => {
         'app': 'WaifuVault',
-        'version': '1.7.5 V8.5 Clean Home Menu',
+        'version': '1.7.6 V8.5.1 Clean Home Menu',
         'exportedAt': DateTime.now().toIso8601String(),
         'itemCount': _items.length,
         'items': _items.map((e) => e.toJson()).toList(),
@@ -379,7 +379,7 @@ class VaultStore extends ChangeNotifier {
   }
 
   Future<int> importFromFolder(String folderPath, {String category = 'Lainnya', bool silent = false}) async {
-    // V8.5: Dual Folder Auto Scan.
+    // V8.5.1: Dual Folder Auto Scan.
     // Media dari SD Card tetap di SD Card sebagai path utama, tanpa copy ke internal.
     // Media dari picker biasa dicopy ke folder publik internal: /storage/emulated/0/DCM Waifu/.
     // Saat item SD dihapus dari WaifuVault, file asli di folder SD ikut dihapus.
@@ -682,6 +682,19 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) showSnack(context, '${ids.length} item dihapus.');
   }
 
+  Future<void> scanAllManagedFoldersFromHome() async {
+    final allowed = await ensureStorageAccessForFixedSd(context);
+    if (!mounted) return;
+    if (!allowed) {
+      showSnack(context, 'Aktifkan izin file dulu, lalu scan ulang.');
+      return;
+    }
+    final result = await widget.store.scanManagedFolders();
+    if (!mounted) return;
+    final added = result.internalAdded + result.sdAdded;
+    showSnack(context, added == 0 ? 'Tidak ada media baru di DCM Waifu.' : '$added media baru masuk dari DCM Waifu.');
+  }
+
   @override
   Widget build(BuildContext context) {
     return NeonBackground(
@@ -711,9 +724,21 @@ class _HomeScreenState extends State<HomeScreen> {
                               Positioned(
                                 right: 0,
                                 top: 6,
-                                child: NeonIconButton(
-                                  icon: Icons.more_vert_rounded,
-                                  onTap: () => showHomeActionsSheet(context, widget.store),
+                                child: PopupMenuButton<String>(
+                                  color: kPanel,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                                  icon: const Icon(Icons.more_vert_rounded),
+                                  onSelected: (value) {
+                                    if (value == 'add') {
+                                      Navigator.push(context, MaterialPageRoute(builder: (_) => AddMediaScreen(store: widget.store)));
+                                    } else if (value == 'scan') {
+                                      scanAllManagedFoldersFromHome();
+                                    }
+                                  },
+                                  itemBuilder: (context) => const [
+                                    PopupMenuItem(value: 'add', child: ListTile(leading: Icon(Icons.add_photo_alternate_rounded, color: kPink), title: Text('Tambah Media'))),
+                                    PopupMenuItem(value: 'scan', child: ListTile(leading: Icon(Icons.folder_sync_rounded, color: kBlue), title: Text('Scan Semua DCM Waifu'))),
+                                  ],
                                 ),
                               ),
                             ],
@@ -1187,7 +1212,7 @@ class ProfileScreen extends StatelessWidget {
                 SettingsTile(icon: Icons.storage_rounded, title: 'Storage Mode', subtitle: 'Internal / SD public path + backup JSON', trailing: Icons.chevron_right_rounded, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => StorageModeScreen(store: store)))),
                 SettingsTile(icon: Icons.cloud_upload_rounded, title: 'Backup & Ekspor', subtitle: 'Buat file backup koleksi', trailing: Icons.chevron_right_rounded, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => StorageModeScreen(store: store)))),
                 SettingsTile(icon: Icons.lock_rounded, title: 'Mode Privat', subtitle: 'Dilewati dulu; bisa lanjut V6 nanti', trailing: Icons.lock_outline_rounded),
-                SettingsTile(icon: Icons.info_rounded, title: 'Tentang WaifuVault', subtitle: 'v1.7.5 V8.5 Clean Home Menu', trailing: Icons.chevron_right_rounded),
+                SettingsTile(icon: Icons.info_rounded, title: 'Tentang WaifuVault', subtitle: 'v1.7.6 V8.5.1 Clean Home Menu', trailing: Icons.chevron_right_rounded),
               ],
             );
           },
@@ -1468,7 +1493,7 @@ class _StorageModeScreenState extends State<StorageModeScreen> {
                         ),
                         const SizedBox(height: 14),
                         const Text(
-                          'V8.5 tetap bisa baca dua jalur publik: Internal /storage/emulated/0/DCM Waifu/ dan SD /storage/4394-15F8/DCM Waifu/. File manual di folder itu bisa masuk koleksi tanpa tombol import picker.',
+                          'V8.5.1 tetap bisa baca dua jalur publik: Internal /storage/emulated/0/DCM Waifu/ dan SD /storage/4394-15F8/DCM Waifu/. File manual di folder itu bisa masuk koleksi tanpa tombol import picker.',
                           style: TextStyle(color: kTextSoft, height: 1.35),
                         ),
                       ],
@@ -1627,7 +1652,7 @@ class _StorageModeScreenState extends State<StorageModeScreen> {
 
 
 Future<Directory> getVaultDirectory(String folderName) async {
-  // V8.5: jangan simpan media utama di folder private /data/user/0.
+  // V8.5.1: jangan simpan media utama di folder private /data/user/0.
   // Import biasa masuk folder publik internal, namanya disamain dengan folder SD: DCM Waifu.
   Directory dir;
   if (folderName == 'waifuvault_media') {
@@ -2437,7 +2462,7 @@ class _SdCardPathScreenState extends State<SdCardPathScreen> {
                 padding: const EdgeInsets.all(16),
                 borderColor: kPurple.withOpacity(0.35),
                 child: const Text(
-                  'V8.5: import biasa masuk /storage/emulated/0/DCM Waifu/, SD tetap /storage/4394-15F8/DCM Waifu/. Delete ikut hapus file utama.',
+                  'V8.5.1: import biasa masuk /storage/emulated/0/DCM Waifu/, SD tetap /storage/4394-15F8/DCM Waifu/. Delete ikut hapus file utama.',
                   style: TextStyle(color: kTextSoft, height: 1.35),
                 ),
               ),
@@ -3554,55 +3579,6 @@ void showPreviewModeSheet(BuildContext context) {
             style: FilledButton.styleFrom(backgroundColor: kPink, foregroundColor: Colors.white),
             icon: const Icon(Icons.check_rounded),
             label: const Text('Oke'),
-          ),
-        ],
-      ),
-    ),
-  );
-}
-
-
-void showHomeActionsSheet(BuildContext context, VaultStore store) {
-  showModalBottomSheet(
-    context: context,
-    backgroundColor: kPanel,
-    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(26))),
-    builder: (sheetContext) => Padding(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Menu Beranda', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 8),
-          const Text('Tombol tambah dipindah ke sini biar beranda lebih clean.', style: TextStyle(color: kTextSoft)),
-          const SizedBox(height: 14),
-          ListTile(
-            leading: const Icon(Icons.add_photo_alternate_rounded, color: kPink),
-            title: const Text('Tambah Media'),
-            subtitle: const Text('Import foto/video lewat picker', style: TextStyle(color: kTextSoft)),
-            onTap: () {
-              Navigator.pop(sheetContext);
-              Navigator.push(context, MaterialPageRoute(builder: (_) => AddMediaScreen(store: store)));
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.folder_sync_rounded, color: kBlue),
-            title: const Text('Scan Semua DCM Waifu'),
-            subtitle: const Text('Baca folder internal + SD tanpa import picker', style: TextStyle(color: kTextSoft)),
-            onTap: () async {
-              Navigator.pop(sheetContext);
-              final allowed = await ensureStorageAccessForFixedSd(context);
-              if (!context.mounted) return;
-              if (!allowed) {
-                showSnack(context, 'Aktifkan izin file dulu, lalu scan ulang.');
-                return;
-              }
-              final result = await store.scanManagedFolders();
-              if (!context.mounted) return;
-              final added = result.internalAdded + result.sdAdded;
-              showSnack(context, added == 0 ? 'Tidak ada media baru di DCM Waifu.' : '$added media baru masuk dari DCM Waifu.');
-            },
           ),
         ],
       ),
