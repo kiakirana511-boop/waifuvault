@@ -1,31 +1,30 @@
-# WaifuVault V5
+# WaifuVault V7 Storage Mode
 
-WaifuVault adalah galeri anime pribadi berbasis Flutter dengan UI dark neon, thumbnail video, adaptive video color, dan branding custom.
+WaifuVault V7 skips V6 private mode and focuses on storage management plus UI polish.
 
-## V5 Branding Upgrade
+## V7 Upgrade
 
-- Icon aplikasi custom WaifuVault.
-- Splash screen neon saat aplikasi dibuka.
-- Nama aplikasi di homescreen menjadi `WaifuVault`.
-- Badge dashboard menjadi `V5 Branding`.
-- Default judul video baru menjadi `Video Baru`.
-- Versi app: `1.4.0+7`.
+- App title on Home is centered.
+- Dashboard badge updated to V7 Storage Mode.
+- Storage Mode page added in Profile.
+- Internal app storage info and stats.
+- Backup JSON export.
+- Scan missing media files.
+- Clean broken/missing media entries.
+- V5 icon and splash remain.
+- V3.1 adaptive video color remains.
+- V4.1 clean premium UI remains.
 
-## Fitur yang tetap ada
+## Upload / Replace
 
-- Import foto dan video.
-- Salin media ke storage aplikasi agar koleksi tetap aman.
-- Thumbnail video otomatis dari frame video.
-- Adaptive video color: background/glow preview video mengikuti warna video.
-- Search berdasarkan judul/kategori.
-- Counter kategori real-time.
-- Favorit dan koleksi 2 kolom.
-- Delete item dari koleksi + hapus salinan file app.
-- UI dark neon futuristik.
+Upload all files/folders to the same paths in GitHub:
 
-## Build APK
+```text
+pubspec.yaml
+README.md
+lib/main.dart
+.github/workflows/build-apk.yml
+assets/branding/...
+```
 
-Upload semua isi folder ini ke repo GitHub, termasuk folder `assets/branding`.
-Lalu buka tab Actions dan jalankan workflow `Build WaifuVault APK`.
-
-APK akan muncul sebagai artifact `WaifuVault-APK`.
+Version: 1.6.0+8
