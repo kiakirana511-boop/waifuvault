@@ -1,15 +1,18 @@
-# WaifuVault V8.10.1 Ultra Light Route
+# WaifuVault V9 - Hoshino Cosmic UI
 
-V8.10.1 keeps the V8.10 smooth tab idea, but makes profile/menu route transitions much lighter for 60Hz/low-end Android phones.
+UI overhaul mengikuti referensi cosmic/private gallery: judul Hoshino, starry background, hero welcome card, soft pink-blue glass cards, bottom nav clean, dan fitur storage/scan versi sebelumnya tetap dipertahankan.
 
-Update files:
+Upload/replace ke GitHub:
 - pubspec.yaml
 - README.md
 - lib/main.dart
 - .github/workflows/build-apk.yml
 
-## Changes
-- Profile -> Storage Mode transition reduced to ultra-light fade.
-- Back transition reduced so it does not feel like dropped FPS.
-- Tab animation stays PageView-based but a little faster.
-- Clean home, dual DCM Waifu paths, SD/internal scan, and advanced gallery remain intact.
+Assets branding V5 boleh dibiarkan.
+
+
+## V9.1 Full Reference UI
+- UI dirombak mengikuti referensi Hoshino Private Waifu Gallery.
+- Bottom nav: Home, Gallery, Voice, Profile.
+- Home welcome card, Gallery grid, Voice player dummy, Profile bond card.
+- Fitur DCM Waifu scan/internal+SD tetap ada.
