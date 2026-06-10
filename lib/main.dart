@@ -262,7 +262,7 @@ class VaultStore extends ChangeNotifier {
 
   Map<String, dynamic> backupPayload() => {
         'app': 'WaifuVault',
-        'version': '1.6.4 V7.4 SD Permission Fix',
+        'version': '1.6.5 V7.4.1 Build Fix',
         'exportedAt': DateTime.now().toIso8601String(),
         'itemCount': _items.length,
         'items': _items.map((e) => e.toJson()).toList(),
@@ -719,7 +719,7 @@ class PremiumDashboard extends StatelessWidget {
                             children: [
                               Icon(Icons.bolt_rounded, size: 16, color: kBlue),
                               SizedBox(width: 5),
-                              Text('V7.3 Fixed SD', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900)),
+                              Text('V7.4.1 SD Fix', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900)),
                             ],
                           ),
                         ),
@@ -1039,7 +1039,7 @@ class ProfileScreen extends StatelessWidget {
                 SettingsTile(icon: Icons.storage_rounded, title: 'Storage Mode', subtitle: 'Internal app storage + backup JSON', trailing: Icons.chevron_right_rounded, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => StorageModeScreen(store: store)))),
                 SettingsTile(icon: Icons.cloud_upload_rounded, title: 'Backup & Ekspor', subtitle: 'Buat file backup koleksi', trailing: Icons.chevron_right_rounded, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => StorageModeScreen(store: store)))),
                 SettingsTile(icon: Icons.lock_rounded, title: 'Mode Privat', subtitle: 'Dilewati dulu; bisa lanjut V6 nanti', trailing: Icons.lock_outline_rounded),
-                SettingsTile(icon: Icons.info_rounded, title: 'Tentang WaifuVault', subtitle: 'v1.6.3 V7.3 Fixed SD Import', trailing: Icons.chevron_right_rounded),
+                SettingsTile(icon: Icons.info_rounded, title: 'Tentang WaifuVault', subtitle: 'v1.6.5 V7.4.1 SD Permission Fix', trailing: Icons.chevron_right_rounded),
               ],
             );
           },
@@ -2192,7 +2192,7 @@ class _SdCardPathScreenState extends State<SdCardPathScreen> {
                 padding: const EdgeInsets.all(16),
                 borderColor: kPurple.withOpacity(0.35),
                 child: const Text(
-                  'V7.4 pakai path SD tetap /storage/4394-15F8/DCM Waifu/ biar gak rawan salah input. File tetap dicopy ke internal app storage biar aman.',
+                  'V7.4.1 pakai path SD tetap /storage/4394-15F8/DCM Waifu/ biar gak rawan salah input. File tetap dicopy ke internal app storage biar aman.',
                   style: TextStyle(color: kTextSoft, height: 1.35),
                 ),
               ),
