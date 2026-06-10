@@ -1,6 +1,6 @@
-# WaifuVault V7.1 Storage Mode
+# WaifuVault V7.3 Fixed SD Import
 
-WaifuVault V7.1 skips V6 private mode and focuses on storage management plus UI polish.
+WaifuVault V7.3 skips V6 private mode and focuses on fixed SD import plus UI polish.
 
 ## V7 Upgrade
 
@@ -27,11 +27,27 @@ lib/main.dart
 assets/branding/...
 ```
 
-Version: 1.6.1+9
+Version: 1.6.2+10
 
 
-## V7.1 Hotfix
+## V7.2 Hotfix
 - Tombol kanan atas preview foto/video sekarang aktif.
 - Menu titik tiga berisi favorit, path file, refresh warna video, dan hapus.
 - SD Card Mode bisa ditekan untuk simpan path SD Card.
-- Version: 1.6.1+9.
+- Version: 1.6.2+10.
+
+
+## V7.2 SD Scan Import
+- SD Card Path sekarang bisa dipakai buat scan folder.
+- Foto/video yang ditaruh manual di folder SD bisa diimport ke koleksi.
+- Media tetap dicopy ke internal app storage supaya aman di Android.
+- Duplikat dari source path yang sama akan dilewati.
+
+
+## V7.3 Fixed SD Import
+
+- SD Card path is fixed to `/storage/4394-15F8/DCM Waifu/`.
+- Removed the need to type/select SD path from the main Storage Mode flow.
+- Storage Mode card directly scans and imports media from the fixed folder.
+- Keeps copy-to-internal behavior for safe playback and thumbnails.
+- Version: 1.6.3+11.
