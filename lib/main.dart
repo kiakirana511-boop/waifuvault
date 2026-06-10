@@ -52,27 +52,26 @@ const List<VaultCategory> defaultCategories = [
 
 
 PageRouteBuilder<T> smoothPageRoute<T>(Widget page) {
+  // V8.9 Performance Motion: lighter transition for low-end phones.
+  // No Hero/scale-heavy snapshot on media pages, so FPS feels smoother.
   return PageRouteBuilder<T>(
-    transitionDuration: const Duration(milliseconds: 320),
-    reverseTransitionDuration: const Duration(milliseconds: 240),
+    transitionDuration: const Duration(milliseconds: 170),
+    reverseTransitionDuration: const Duration(milliseconds: 130),
     pageBuilder: (context, animation, secondaryAnimation) => page,
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
       final curved = CurvedAnimation(
         parent: animation,
-        curve: Curves.easeOutCubic,
-        reverseCurve: Curves.easeInCubic,
+        curve: Curves.easeOut,
+        reverseCurve: Curves.easeIn,
       );
       return FadeTransition(
         opacity: curved,
         child: SlideTransition(
           position: Tween<Offset>(
-            begin: const Offset(0.055, 0.04),
+            begin: const Offset(0, 0.018),
             end: Offset.zero,
           ).animate(curved),
-          child: ScaleTransition(
-            scale: Tween<double>(begin: 0.965, end: 1.0).animate(curved),
-            child: child,
-          ),
+          child: child,
         ),
       );
     },
@@ -362,7 +361,7 @@ class VaultStore extends ChangeNotifier {
 
   Map<String, dynamic> backupPayload() => {
         'app': 'WaifuVault',
-        'version': '1.8.8 V8.8 Motion Plus',
+        'version': '1.8.9 V8.9 Smooth FPS',
         'exportedAt': DateTime.now().toIso8601String(),
         'itemCount': _items.length,
         'items': _items.map((e) => e.toJson()).toList(),
@@ -591,20 +590,13 @@ class _VaultShellState extends State<VaultShell> {
     return Scaffold(
       extendBody: true,
       body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 290),
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeInCubic,
+        duration: const Duration(milliseconds: 150),
+        switchInCurve: Curves.easeOut,
+        switchOutCurve: Curves.easeIn,
         transitionBuilder: (child, animation) {
-          final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
           return FadeTransition(
-            opacity: curved,
-            child: SlideTransition(
-              position: Tween<Offset>(begin: const Offset(0.04, 0.012), end: Offset.zero).animate(curved),
-              child: ScaleTransition(
-                scale: Tween<double>(begin: 0.985, end: 1.0).animate(curved),
-                child: child,
-              ),
-            ),
+            opacity: animation,
+            child: child,
           );
         },
         child: KeyedSubtree(
@@ -1000,7 +992,7 @@ class PremiumDashboard extends StatelessWidget {
                             children: [
                               Icon(Icons.bolt_rounded, size: 16, color: kBlue),
                               SizedBox(width: 5),
-                              Text('V8.8 Motion Plus', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900)),
+                              Text('V8.9 Smooth FPS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900)),
                             ],
                           ),
                         ),
@@ -1314,7 +1306,7 @@ class ProfileScreen extends StatelessWidget {
                 SettingsTile(icon: Icons.storage_rounded, title: 'Storage Mode', subtitle: 'Internal / SD public path + backup JSON', trailing: Icons.chevron_right_rounded, onTap: () => Navigator.push(context, smoothPageRoute(StorageModeScreen(store: store)))),
                 SettingsTile(icon: Icons.cloud_upload_rounded, title: 'Backup & Ekspor', subtitle: 'Buat file backup koleksi', trailing: Icons.chevron_right_rounded, onTap: () => Navigator.push(context, smoothPageRoute(StorageModeScreen(store: store)))),
                 SettingsTile(icon: Icons.lock_rounded, title: 'Mode Privat', subtitle: 'Dilewati dulu; bisa lanjut V6 nanti', trailing: Icons.lock_outline_rounded),
-                SettingsTile(icon: Icons.info_rounded, title: 'Tentang WaifuVault', subtitle: 'v1.8.8 V8.8 Motion Plus', trailing: Icons.chevron_right_rounded),
+                SettingsTile(icon: Icons.info_rounded, title: 'Tentang WaifuVault', subtitle: 'v1.8.9 V8.9 Smooth FPS', trailing: Icons.chevron_right_rounded),
               ],
             );
           },
@@ -1595,7 +1587,7 @@ class _StorageModeScreenState extends State<StorageModeScreen> {
                         ),
                         const SizedBox(height: 14),
                         const Text(
-                          'V8.8 Motion Plus: transisi tab lebih jelas, buka foto/video pakai hero zoom, card media lebih clean, nama file panjang otomatis dirapikan jadi Foto Baru / Video Baru.',
+                          'V8.9 Smooth FPS: transisi dibuat lebih ringan, FPS lebih stabil di HP, card media lebih clean, nama file panjang otomatis dirapikan jadi Foto Baru / Video Baru.',
                           style: TextStyle(color: kTextSoft, height: 1.35),
                         ),
                       ],
@@ -2570,7 +2562,7 @@ class _SdCardPathScreenState extends State<SdCardPathScreen> {
                 padding: const EdgeInsets.all(16),
                 borderColor: kPurple.withOpacity(0.35),
                 child: const Text(
-                  'V8.8: motion plus lebih kerasa, hero zoom preview, card lebih clean, dan auto-scan DCM Waifu tetap jalan.',
+                  'V8.9: motion lebih ringan dan stabil, card tetap clean, auto-scan DCM Waifu tetap jalan.',
                   style: TextStyle(color: kTextSoft, height: 1.35),
                 ),
               ),
@@ -2894,12 +2886,9 @@ class MediaTile extends StatelessWidget {
     return GestureDetector(
       onTap: selectionMode ? onSelectedTap : () => open(context),
       onLongPress: onLongPress,
-      child: Hero(
-        tag: mediaHeroTag(item),
-        transitionOnUserGestures: true,
-        child: Material(
-          color: Colors.transparent,
-          child: Container(
+      child: Material(
+        color: Colors.transparent,
+        child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
           border: Border.all(color: accent.withOpacity(0.55), width: 1.1),
@@ -3023,7 +3012,6 @@ class MediaTile extends StatelessWidget {
         ),
           ),
         ),
-      ),
     );
   }
 }
