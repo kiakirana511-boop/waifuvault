@@ -359,7 +359,7 @@ class VaultStore extends ChangeNotifier {
 
   Map<String, dynamic> backupPayload() => {
         'app': 'WaifuVault',
-        'version': '2.0.6 V9.4 Real Voice Player',
+        'version': '2.0.7 V9.4.1 Voice Performance Patch',
         'exportedAt': DateTime.now().toIso8601String(),
         'itemCount': _items.length,
         'items': _items.map((e) => e.toJson()).toList(),
@@ -1173,6 +1173,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
   StreamSubscription<PlayerState>? _stateSub;
   StreamSubscription<void>? _completeSub;
   Timer? _spectrumTimer;
+  int _lastPositionUiMs = 0;
 
   bool _loading = true;
   bool _playing = false;
@@ -1192,6 +1193,13 @@ class _VoiceScreenState extends State<VoiceScreen> {
     });
     _positionSub = _player.onPositionChanged.listen((position) {
       if (!mounted) return;
+      final now = DateTime.now().millisecondsSinceEpoch;
+      // V9.4.1: throttle update progress biar tidak rebuild full Voice page terlalu sering.
+      if (now - _lastPositionUiMs < 260 && position < _duration) {
+        _position = position;
+        return;
+      }
+      _lastPositionUiMs = now;
       setState(() => _position = position);
     });
     _stateSub = _player.onPlayerStateChanged.listen((state) {
@@ -1199,7 +1207,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
       setState(() => _playing = state == PlayerState.playing);
     });
     _completeSub = _player.onPlayerComplete.listen((_) => _next());
-    _spectrumTimer = Timer.periodic(const Duration(milliseconds: 82), (_) {
+    _spectrumTimer = Timer.periodic(const Duration(milliseconds: 145), (_) {
       if (!mounted) return;
       if (_playing) {
         setState(() {
@@ -1377,7 +1385,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  SpectrumVisualizer(values: _spectrum, playing: _playing),
+                  RepaintBoundary(child: SpectrumVisualizer(values: _spectrum, playing: _playing)),
                   const SizedBox(height: 10),
                   SliderTheme(
                     data: SliderTheme.of(context).copyWith(trackHeight: 3, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5)),
@@ -1455,38 +1463,52 @@ class SpectrumVisualizer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // V9.4.1: tampilannya tetap waveform bar pink-biru, tapi render pakai satu CustomPaint.
+    // Ini jauh lebih ringan daripada 52 AnimatedContainer + shadow setiap frame.
     return SizedBox(
       height: 98,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final width = constraints.maxWidth.isFinite ? constraints.maxWidth : 280.0;
-          const gap = 3.0;
-          final count = values.isEmpty ? 1 : values.length;
-          final barWidth = ((width - gap * (count - 1)) / count).clamp(2.0, 5.0).toDouble();
-          return Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: List.generate(count, (i) {
-              final value = values[i].clamp(.12, 1.0).toDouble();
-              final height = 14 + value * 76;
-              final color = Color.lerp(kBlue, kPink, i / math.max(1, count - 1))!.withOpacity(playing ? .94 : .52);
-              return AnimatedContainer(
-                duration: const Duration(milliseconds: 75),
-                curve: Curves.easeOutCubic,
-                margin: EdgeInsets.only(right: i == count - 1 ? 0 : gap),
-                width: barWidth,
-                height: height,
-                decoration: BoxDecoration(
-                  color: color,
-                  borderRadius: BorderRadius.circular(99),
-                  boxShadow: playing ? [BoxShadow(color: color.withOpacity(.22), blurRadius: 9)] : null,
-                ),
-              );
-            }),
-          );
-        },
+      width: double.infinity,
+      child: CustomPaint(
+        painter: SpectrumBarPainter(values: values, playing: playing),
       ),
     );
+  }
+}
+
+class SpectrumBarPainter extends CustomPainter {
+  final List<double> values;
+  final bool playing;
+
+  const SpectrumBarPainter({required this.values, required this.playing});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (values.isEmpty || size.width <= 0 || size.height <= 0) return;
+    const gap = 3.0;
+    final count = values.length;
+    final barWidth = ((size.width - gap * (count - 1)) / count).clamp(2.0, 5.0).toDouble();
+    final totalWidth = count * barWidth + (count - 1) * gap;
+    var x = (size.width - totalWidth) / 2;
+    final centerY = size.height / 2;
+    final paint = Paint()..style = PaintingStyle.fill;
+
+    for (int i = 0; i < count; i++) {
+      final value = values[i].clamp(.12, 1.0).toDouble();
+      final height = 14 + value * 76;
+      final color = Color.lerp(kBlue, kPink, i / math.max(1, count - 1))!.withOpacity(playing ? .94 : .52);
+      paint.color = color;
+      final rect = Rect.fromLTWH(x, centerY - height / 2, barWidth, height);
+      canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(99)), paint);
+      x += barWidth + gap;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant SpectrumBarPainter oldDelegate) {
+    if (oldDelegate.playing != playing) return true;
+    if (oldDelegate.values.length != values.length) return true;
+    if (!playing) return false;
+    return true;
   }
 }
 
@@ -1999,7 +2021,7 @@ class ProfileScreen extends StatelessWidget {
                 SettingsTile(icon: Icons.storage_rounded, title: 'Storage Mode', subtitle: 'Internal + SD DCM Waifu', trailing: Icons.chevron_right_rounded, onTap: () => Navigator.push(context, smoothPageRoute(StorageModeScreen(store: store)))),
                 SettingsTile(icon: Icons.cloud_upload_rounded, title: 'Backup & Sync', subtitle: 'Backup JSON koleksi', trailing: Icons.chevron_right_rounded, onTap: () => Navigator.push(context, smoothPageRoute(StorageModeScreen(store: store)))),
                 SettingsTile(icon: Icons.lock_rounded, title: 'App Lock', subtitle: 'Off', trailing: Icons.chevron_right_rounded),
-                SettingsTile(icon: Icons.info_rounded, title: 'About', subtitle: 'v2.0.6+36 V9.4 Real Voice Player', trailing: Icons.chevron_right_rounded),
+                SettingsTile(icon: Icons.info_rounded, title: 'About', subtitle: 'v2.0.7+37 V9.4.1 Voice Performance Patch', trailing: Icons.chevron_right_rounded),
               ],
             );
           },
@@ -3274,7 +3296,7 @@ class _SdCardPathScreenState extends State<SdCardPathScreen> {
                 padding: const EdgeInsets.all(16),
                 borderColor: kPurple.withOpacity(0.35),
                 child: const Text(
-                  'V9.4: tab Voice bisa scan dan putar audio lokal dari DCM Waifu/Voice dengan spectrum visualizer ringan.',
+                  'V9.4.1: voice player tetap sama, spectrum dibuat lebih ringan supaya FPS lebih stabil.',
                   style: TextStyle(color: kTextSoft, height: 1.35),
                 ),
               ),
