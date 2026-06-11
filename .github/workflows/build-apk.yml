@@ -26,37 +26,6 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Apply V9.2 Reference Polish
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          main = Path('lib/main.dart')
-          text = main.read_text()
-          replacements = {
-            "'version': '1.9.0 V9 Hoshino Cosmic UI'": "'version': '2.0.3 V9.2 Reference Polish'",
-            "GradientText(title, style: const TextStyle(fontSize: 48, fontWeight: FontWeight.w500, letterSpacing: 1.2))": "GradientText(title, style: const TextStyle(fontSize: 50, fontWeight: FontWeight.w400, letterSpacing: 1.6, fontFamily: 'serif'))",
-            "Text(subtitle, style: const TextStyle(color: kCosmicGold, fontSize: 12, letterSpacing: 2.8, fontWeight: FontWeight.w600))": "Text(subtitle, style: const TextStyle(color: kCosmicGold, fontSize: 12, letterSpacing: 3.1, fontWeight: FontWeight.w600))",
-            "height: 390,": "height: 318,",
-            "childAspectRatio: 1.45,": "childAspectRatio: 1.95,",
-            "padding: const EdgeInsets.all(12),\n        borderColor: color.withOpacity(.28),": "padding: const EdgeInsets.all(10),\n        borderColor: color.withOpacity(.22),",
-            "Icon(icon, color: color, size: 30),\n            const SizedBox(height: 8),": "Icon(icon, color: color, size: 24),\n            const SizedBox(height: 6),",
-            "Text('Welcome back,', style: TextStyle(color: Colors.white.withOpacity(.86), fontSize: 14))": "Text('Welcome back,', style: TextStyle(color: Colors.white.withOpacity(.86), fontSize: 13))",
-            "Text('Sensei', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w500": "Text('Sensei', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w500",
-            "style: const TextStyle(fontSize: 22, color: Colors.white, fontWeight: FontWeight.w800))": "style: const TextStyle(fontSize: 20, color: Colors.white, fontWeight: FontWeight.w800))",
-            "width: 170,\n                    height: 170,": "width: 138,\n                    height: 138,",
-            "Container(width: 52, height: 52": "Container(width: 46, height: 46",
-            "Center(child: GradientText('Hoshino', style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w500)))": "Center(child: GradientText('Hoshino', style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w400, fontFamily: 'serif')))",
-            "Widget build(BuildContext context) => SizedBox(height: 74, child: CustomPaint(painter: WavePainter()));": "Widget build(BuildContext context) => SizedBox(height: 88, child: CustomPaint(painter: WavePainter()));",
-            "for (int i = 0; i < 36; i++) {\n      final x = i * (size.width / 35);": "for (int i = 0; i < 54; i++) {\n      final x = i * (size.width / 53);",
-            "paint.color = Color.lerp(kBlue, kPink, i / 35)!": "paint.color = Color.lerp(kBlue, kPink, i / 53)!",
-            "v2.0.0+30 V9.1 Full Reference UI": "v2.0.3+33 V9.2 Reference Polish",
-            "V9: tampilan diubah ke gaya Hoshino cosmic gallery, tetap pakai storage public DCM Waifu dan auto-scan.": "V9.2: reference polish, cosmic soft spacing, compact home cards, serif Hoshino title, dan storage public DCM Waifu tetap aktif.",
-          }
-          for old, new in replacements.items():
-              text = text.replace(old, new)
-          main.write_text(text)
-          PY
-
       - name: Set app display name and storage permissions
         run: |
           python3 - <<'PY'
