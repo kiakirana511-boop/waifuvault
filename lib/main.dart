@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -11,6 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 void main() {
   runApp(const WaifuVaultApp());
@@ -27,6 +30,9 @@ const Color kCosmicGold = Color(0xFFFFD7A3);
 const String kFixedSdImportPath = '/storage/4394-15F8/DCM Waifu';
 const String kPublicInternalVaultPath = '/storage/emulated/0/DCM Waifu';
 const String kPublicInternalCachePath = '/storage/emulated/0/DCM Waifu/.waifuvault_cache';
+const String kPublicInternalVoicePath = '/storage/emulated/0/DCM Waifu/Voice';
+const String kFixedSdVoicePath = '/storage/4394-15F8/DCM Waifu/Voice';
+const List<String> kVoiceExtensions = ['.mp3', '.wav', '.m4a', '.aac', '.ogg'];
 const List<String> kFixedSdImportPathCandidates = [
   '/storage/4394-15F8/DCM Waifu',
   '/storage/4394-15F8/DCM Waifu/',
@@ -353,7 +359,7 @@ class VaultStore extends ChangeNotifier {
 
   Map<String, dynamic> backupPayload() => {
         'app': 'WaifuVault',
-        'version': '2.0.5 V9.3 Reference Final Polish',
+        'version': '2.0.6 V9.4 Real Voice Player',
         'exportedAt': DateTime.now().toIso8601String(),
         'itemCount': _items.length,
         'items': _items.map((e) => e.toJson()).toList(),
@@ -1082,68 +1088,346 @@ class _GalleryScreenState extends State<GalleryScreen> {
   }
 }
 
-class VoiceScreen extends StatelessWidget {
+
+class VoiceTrack {
+  final String path;
+  final String title;
+  final String source;
+
+  const VoiceTrack({required this.path, required this.title, required this.source});
+}
+
+bool isSupportedVoiceFile(String path) {
+  final ext = p.extension(path).toLowerCase();
+  return kVoiceExtensions.contains(ext);
+}
+
+String cleanVoiceTitleFromPath(String path) {
+  final raw = p.basenameWithoutExtension(path)
+      .replaceAll(RegExp(r'[_\-]+'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+  if (raw.isEmpty) return 'Hoshino Voice';
+  if (raw.length > 34 || RegExp(r'\d{8,}').hasMatch(raw)) return 'Hoshino Voice';
+  return raw.split(' ').map((word) {
+    if (word.isEmpty) return word;
+    return word[0].toUpperCase() + (word.length > 1 ? word.substring(1) : '');
+  }).join(' ');
+}
+
+String formatVoiceDuration(Duration d) {
+  if (d == Duration.zero || d.inMilliseconds <= 0) return '00:00';
+  final minutes = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+  final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+  final hours = d.inHours;
+  if (hours > 0) return '$hours:$minutes:$seconds';
+  return '$minutes:$seconds';
+}
+
+Future<List<VoiceTrack>> scanVoiceTracks() async {
+  final folders = <({String path, String source})>[
+    (path: kPublicInternalVoicePath, source: 'Internal'),
+    (path: kFixedSdVoicePath, source: 'SD Card'),
+  ];
+  final tracks = <VoiceTrack>[];
+  final seen = <String>{};
+
+  for (final folder in folders) {
+    try {
+      final dir = Directory(folder.path);
+      if (!await dir.exists()) {
+        if (folder.source == 'Internal') {
+          await dir.create(recursive: true);
+        }
+        continue;
+      }
+      await for (final entity in dir.list(recursive: false, followLinks: false)) {
+        if (entity is! File) continue;
+        final path = entity.path;
+        if (!isSupportedVoiceFile(path)) continue;
+        if (!seen.add(path)) continue;
+        tracks.add(VoiceTrack(path: path, title: cleanVoiceTitleFromPath(path), source: folder.source));
+      }
+    } catch (_) {}
+  }
+
+  tracks.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+  return tracks;
+}
+
+class VoiceScreen extends StatefulWidget {
   final VaultStore store;
   const VoiceScreen({super.key, required this.store});
 
   @override
+  State<VoiceScreen> createState() => _VoiceScreenState();
+}
+
+class _VoiceScreenState extends State<VoiceScreen> {
+  final AudioPlayer _player = AudioPlayer();
+  final List<VoiceTrack> _tracks = [];
+  final List<double> _spectrum = List<double>.filled(52, .28);
+
+  StreamSubscription<Duration>? _durationSub;
+  StreamSubscription<Duration>? _positionSub;
+  StreamSubscription<PlayerState>? _stateSub;
+  StreamSubscription<void>? _completeSub;
+  Timer? _spectrumTimer;
+
+  bool _loading = true;
+  bool _playing = false;
+  int _index = 0;
+  int _tick = 0;
+  Duration _duration = Duration.zero;
+  Duration _position = Duration.zero;
+
+  VoiceTrack? get _current => _tracks.isEmpty ? null : _tracks[_index.clamp(0, _tracks.length - 1).toInt()];
+
+  @override
+  void initState() {
+    super.initState();
+    _durationSub = _player.onDurationChanged.listen((duration) {
+      if (!mounted) return;
+      setState(() => _duration = duration);
+    });
+    _positionSub = _player.onPositionChanged.listen((position) {
+      if (!mounted) return;
+      setState(() => _position = position);
+    });
+    _stateSub = _player.onPlayerStateChanged.listen((state) {
+      if (!mounted) return;
+      setState(() => _playing = state == PlayerState.playing);
+    });
+    _completeSub = _player.onPlayerComplete.listen((_) => _next());
+    _spectrumTimer = Timer.periodic(const Duration(milliseconds: 82), (_) {
+      if (!mounted) return;
+      if (_playing) {
+        setState(() {
+          _tick++;
+          _updateSpectrum();
+        });
+      }
+    });
+    _scanTracks();
+  }
+
+  @override
+  void dispose() {
+    _spectrumTimer?.cancel();
+    _durationSub?.cancel();
+    _positionSub?.cancel();
+    _stateSub?.cancel();
+    _completeSub?.cancel();
+    _player.dispose();
+    super.dispose();
+  }
+
+  Future<void> _scanTracks() async {
+    setState(() => _loading = true);
+    final result = await scanVoiceTracks();
+    if (!mounted) return;
+    setState(() {
+      _tracks
+        ..clear()
+        ..addAll(result);
+      if (_index >= _tracks.length) _index = 0;
+      _loading = false;
+      _updateSpectrum(forceIdle: true);
+    });
+  }
+
+  void _updateSpectrum({bool forceIdle = false}) {
+    final trackHash = (_current?.path.hashCode ?? 17).abs();
+    final t = forceIdle ? 0.0 : (_position.inMilliseconds / 1000.0) + (_tick * .035);
+    for (int i = 0; i < _spectrum.length; i++) {
+      final zone = i / math.max(1, _spectrum.length - 1);
+      final bass = math.sin(t * (2.0 + (trackHash % 7) * .03) + i * .42) * .5 + .5;
+      final mid = math.sin(t * (4.4 + (trackHash % 11) * .02) + i * .88 + 1.2) * .5 + .5;
+      final high = math.sin(t * (7.6 + (trackHash % 13) * .02) + i * 1.37 + 2.4) * .5 + .5;
+      final pulse = math.sin(t * 1.35 + zone * math.pi * 2) * .5 + .5;
+      double value;
+      if (i < _spectrum.length * .28) {
+        value = bass * .72 + pulse * .28;
+      } else if (i < _spectrum.length * .72) {
+        value = mid * .68 + bass * .18 + pulse * .14;
+      } else {
+        value = high * .62 + mid * .26 + pulse * .12;
+      }
+      if (!_playing && !forceIdle) value *= .42;
+      _spectrum[i] = (.18 + value * .82).clamp(.14, 1.0).toDouble();
+    }
+  }
+
+  Future<void> _playIndex(int index) async {
+    if (_tracks.isEmpty) {
+      showSnack(context, 'Taruh audio di folder DCM Waifu/Voice dulu.');
+      return;
+    }
+    final safeIndex = index.clamp(0, _tracks.length - 1).toInt();
+    final track = _tracks[safeIndex];
+    try {
+      setState(() {
+        _index = safeIndex;
+        _position = Duration.zero;
+        _duration = Duration.zero;
+        _updateSpectrum(forceIdle: true);
+      });
+      await _player.stop();
+      await _player.play(DeviceFileSource(track.path));
+    } catch (_) {
+      showSnack(context, 'Audio gagal diputar. Coba format mp3/m4a/wav lain.');
+    }
+  }
+
+  Future<void> _togglePlay() async {
+    final current = _current;
+    if (current == null) {
+      await _scanTracks();
+      if (_tracks.isEmpty) {
+        showSnack(context, 'Folder Voice masih kosong.');
+        return;
+      }
+      await _playIndex(0);
+      return;
+    }
+    try {
+      if (_playing) {
+        await _player.pause();
+      } else if (_position > Duration.zero && (_duration == Duration.zero || _position < _duration)) {
+        await _player.resume();
+      } else {
+        await _playIndex(_index);
+      }
+    } catch (_) {
+      await _playIndex(_index);
+    }
+  }
+
+  Future<void> _next() async {
+    if (_tracks.isEmpty) return;
+    await _playIndex((_index + 1) % _tracks.length);
+  }
+
+  Future<void> _previous() async {
+    if (_tracks.isEmpty) return;
+    await _playIndex((_index - 1 + _tracks.length) % _tracks.length);
+  }
+
+  Future<void> _seek(double value) async {
+    if (_duration == Duration.zero) return;
+    final target = Duration(milliseconds: value.round());
+    await _player.seek(target);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final latest = store.items.isNotEmpty ? store.items.first : null;
+    final latest = widget.store.items.isNotEmpty ? widget.store.items.first : null;
     final avatar = mediaPreviewFile(latest);
+    final current = _current;
+    final progressMax = math.max(1, _duration.inMilliseconds).toDouble();
+    final progress = _position.inMilliseconds.clamp(0, math.max(1, _duration.inMilliseconds)).toDouble();
+
     return NeonBackground(
       child: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(18, 18, 18, 110),
           children: [
             const Center(child: Text('Voice', style: TextStyle(fontSize: 31, fontWeight: FontWeight.w400, color: Colors.white, letterSpacing: .8, fontFamily: 'serif'))),
-            const SizedBox(height: 20),
+            const SizedBox(height: 18),
             Center(
               child: Stack(
                 alignment: Alignment.bottomRight,
                 children: [
                   Container(
-                    width: 138,
-                    height: 138,
+                    width: 132,
+                    height: 132,
                     decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: kBlue.withOpacity(.55), width: 2), boxShadow: const [BoxShadow(color: Color(0x6689B8FF), blurRadius: 38)]),
                     clipBehavior: Clip.antiAlias,
                     child: avatar != null ? Image.file(avatar, fit: BoxFit.cover) : const DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(colors: [kPink, kBlue])), child: Icon(Icons.graphic_eq_rounded, size: 68)),
                   ),
-                  Container(width: 46, height: 46, decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [kPink, kBlue])), child: const Icon(Icons.favorite_rounded, color: Colors.white)),
+                  Container(width: 44, height: 44, decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [kPink, kBlue])), child: Icon(_playing ? Icons.graphic_eq_rounded : Icons.favorite_rounded, color: Colors.white)),
                 ],
               ),
             ),
+            const SizedBox(height: 12),
+            Center(child: GradientText('Hoshino', style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w400, fontFamily: 'serif'))),
+            const Center(child: Text('Real Voice Player', style: TextStyle(color: kTextSoft))),
             const SizedBox(height: 14),
-            Center(child: GradientText('Hoshino', style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w500))),
-            const Center(child: Text('Voice Collection', style: TextStyle(color: kTextSoft))),
-            const SizedBox(height: 18),
-            Row(mainAxisAlignment: MainAxisAlignment.center, children: const [
-              SmallVoiceChip(label: 'Greeting', active: true),
-              SmallVoiceChip(label: 'Cute'),
-              SmallVoiceChip(label: 'Sleep'),
-              SmallVoiceChip(label: 'Custom'),
+            Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              SmallVoiceChip(label: '${_tracks.length} Audio', active: true),
+              const SmallVoiceChip(label: 'Internal'),
+              const SmallVoiceChip(label: 'SD Card'),
+              GestureDetector(onTap: _scanTracks, child: const SmallVoiceChip(label: 'Scan')),
             ]),
-            const SizedBox(height: 18),
+            const SizedBox(height: 16),
             GlassPanel(
-              padding: const EdgeInsets.all(18),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
               child: Column(
-                children: const [
-                  FakeWaveform(),
-                  SizedBox(height: 12),
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(current?.title ?? 'Belum ada voice', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
+                          const SizedBox(height: 3),
+                          Text(current == null ? 'Folder: DCM Waifu/Voice' : '${current.source} • ${p.basename(current.path)}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: kTextSoft, fontSize: 11)),
+                        ]),
+                      ),
+                      IconButton(onPressed: _scanTracks, icon: const Icon(Icons.refresh_rounded, color: kBlue)),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  SpectrumVisualizer(values: _spectrum, playing: _playing),
+                  const SizedBox(height: 10),
+                  SliderTheme(
+                    data: SliderTheme.of(context).copyWith(trackHeight: 3, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5)),
+                    child: Slider(
+                      min: 0,
+                      max: progressMax,
+                      value: progress.clamp(0, progressMax).toDouble(),
+                      activeColor: kPink,
+                      inactiveColor: Colors.white.withOpacity(.12),
+                      onChanged: _duration == Duration.zero ? null : _seek,
+                    ),
+                  ),
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                    Text(formatVoiceDuration(_position), style: const TextStyle(color: kTextSoft, fontSize: 11)),
+                    Text(formatVoiceDuration(_duration), style: const TextStyle(color: kTextSoft, fontSize: 11)),
+                  ]),
+                  const SizedBox(height: 10),
                   Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                    Icon(Icons.skip_previous_rounded, size: 36, color: Colors.white),
-                    SizedBox(width: 22),
-                    CirclePlayButton(),
-                    SizedBox(width: 22),
-                    Icon(Icons.skip_next_rounded, size: 36, color: Colors.white),
+                    IconButton(onPressed: _previous, icon: const Icon(Icons.skip_previous_rounded, size: 36, color: Colors.white)),
+                    const SizedBox(width: 18),
+                    AudioCircleButton(playing: _playing, onTap: _togglePlay),
+                    const SizedBox(width: 18),
+                    IconButton(onPressed: _next, icon: const Icon(Icons.skip_next_rounded, size: 36, color: Colors.white)),
                   ]),
                 ],
               ),
             ),
             const SizedBox(height: 14),
-            const VoiceLineTile(text: 'Good morning, Sensei.', time: '00:12'),
-            const VoiceLineTile(text: 'You did great today!', time: '00:10'),
-            const VoiceLineTile(text: 'Need a little break?', time: '00:11'),
-            const VoiceLineTile(text: 'Sweet dreams, Sensei.', time: '00:13'),
+            if (_loading)
+              const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator(color: kPink)))
+            else if (_tracks.isEmpty)
+              GlassPanel(
+                padding: const EdgeInsets.all(16),
+                child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Folder Voice masih kosong', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+                  SizedBox(height: 6),
+                  Text('/storage/emulated/0/DCM Waifu/Voice/\n/storage/4394-15F8/DCM Waifu/Voice/', style: TextStyle(color: kTextSoft, fontSize: 12)),
+                ]),
+              )
+            else
+              ...List.generate(_tracks.length, (i) {
+                final track = _tracks[i];
+                return VoiceLineTile(
+                  text: track.title,
+                  time: track.source,
+                  active: i == _index,
+                  playing: i == _index && _playing,
+                  onTap: () => _playIndex(i),
+                );
+              }),
           ],
         ),
       ),
@@ -1158,16 +1442,58 @@ class SmallVoiceChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     margin: const EdgeInsets.symmetric(horizontal: 4),
-    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
     decoration: BoxDecoration(borderRadius: BorderRadius.circular(999), color: active ? kPink : Colors.white.withOpacity(.07), border: Border.all(color: active ? kPink : Colors.white12)),
-    child: Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: active ? Colors.white : kTextSoft)),
+    child: Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: active ? Colors.white : kTextSoft)),
   );
+}
+
+class SpectrumVisualizer extends StatelessWidget {
+  final List<double> values;
+  final bool playing;
+  const SpectrumVisualizer({super.key, required this.values, required this.playing});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 98,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth.isFinite ? constraints.maxWidth : 280.0;
+          const gap = 3.0;
+          final count = values.isEmpty ? 1 : values.length;
+          final barWidth = ((width - gap * (count - 1)) / count).clamp(2.0, 5.0).toDouble();
+          return Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: List.generate(count, (i) {
+              final value = values[i].clamp(.12, 1.0).toDouble();
+              final height = 14 + value * 76;
+              final color = Color.lerp(kBlue, kPink, i / math.max(1, count - 1))!.withOpacity(playing ? .94 : .52);
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 75),
+                curve: Curves.easeOutCubic,
+                margin: EdgeInsets.only(right: i == count - 1 ? 0 : gap),
+                width: barWidth,
+                height: height,
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(99),
+                  boxShadow: playing ? [BoxShadow(color: color.withOpacity(.22), blurRadius: 9)] : null,
+                ),
+              );
+            }),
+          );
+        },
+      ),
+    );
+  }
 }
 
 class FakeWaveform extends StatelessWidget {
   const FakeWaveform({super.key});
   @override
-  Widget build(BuildContext context) => SizedBox(height: 96, child: CustomPaint(painter: WavePainter()));
+  Widget build(BuildContext context) => const SpectrumVisualizer(values: [.2, .5, .8, .35, .7, .4, .9, .3, .62, .45, .75, .28], playing: false);
 }
 
 class WavePainter extends CustomPainter {
@@ -1190,25 +1516,52 @@ class CirclePlayButton extends StatelessWidget {
   Widget build(BuildContext context) => Container(width: 62, height: 62, decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [kPink, kPurple])), child: const Icon(Icons.play_arrow_rounded, size: 38, color: Colors.white));
 }
 
-class VoiceLineTile extends StatelessWidget {
-  final String text;
-  final String time;
-  const VoiceLineTile({super.key, required this.text, required this.time});
+class AudioCircleButton extends StatelessWidget {
+  final bool playing;
+  final VoidCallback onTap;
+  const AudioCircleButton({super.key, required this.playing, required this.onTap});
   @override
-  Widget build(BuildContext context) => GlassPanel(
-    margin: const EdgeInsets.only(bottom: 8),
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-    child: Row(children: [
-      const Icon(Icons.play_circle_outline_rounded, color: kPink),
-      const SizedBox(width: 10),
-      Expanded(child: Text(text, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600))),
-      Text(time, style: const TextStyle(color: kTextSoft, fontSize: 12)),
-      const SizedBox(width: 8),
-      const Icon(Icons.favorite_border_rounded, color: kTextSoft, size: 18),
-    ]),
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 160),
+      width: 64,
+      height: 64,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: const LinearGradient(colors: [kPink, kPurple]),
+        boxShadow: [BoxShadow(color: (playing ? kPink : kPurple).withOpacity(.35), blurRadius: playing ? 28 : 18)],
+      ),
+      child: Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded, size: 40, color: Colors.white),
+    ),
   );
 }
 
+class VoiceLineTile extends StatelessWidget {
+  final String text;
+  final String time;
+  final bool active;
+  final bool playing;
+  final VoidCallback? onTap;
+  const VoiceLineTile({super.key, required this.text, required this.time, this.active = false, this.playing = false, this.onTap});
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: GlassPanel(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      borderColor: active ? kPink.withOpacity(.42) : Colors.white10,
+      child: Row(children: [
+        Icon(playing ? Icons.equalizer_rounded : Icons.play_circle_outline_rounded, color: active ? kPink : kTextSoft),
+        const SizedBox(width: 10),
+        Expanded(child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: active ? Colors.white : Colors.white.withOpacity(.88), fontWeight: FontWeight.w700))),
+        Text(time, style: const TextStyle(color: kTextSoft, fontSize: 12)),
+        const SizedBox(width: 8),
+        Icon(active ? Icons.star_rounded : Icons.favorite_border_rounded, color: active ? kCosmicGold : kTextSoft, size: 18),
+      ]),
+    ),
+  );
+}
 
 
 class PremiumDashboard extends StatelessWidget {
@@ -1304,7 +1657,7 @@ class PremiumDashboard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(999),
                         border: Border.all(color: kPink.withOpacity(0.45)),
                       ),
-                      child: const Text('V9.3 FINAL UI', style: TextStyle(fontSize: 11, letterSpacing: 1.3, fontWeight: FontWeight.w900, color: Colors.white)),
+                      child: const Text('V9.4 VOICE', style: TextStyle(fontSize: 11, letterSpacing: 1.3, fontWeight: FontWeight.w900, color: Colors.white)),
                     ),
                     const SizedBox(height: 9),
                     Text(
@@ -1646,7 +1999,7 @@ class ProfileScreen extends StatelessWidget {
                 SettingsTile(icon: Icons.storage_rounded, title: 'Storage Mode', subtitle: 'Internal + SD DCM Waifu', trailing: Icons.chevron_right_rounded, onTap: () => Navigator.push(context, smoothPageRoute(StorageModeScreen(store: store)))),
                 SettingsTile(icon: Icons.cloud_upload_rounded, title: 'Backup & Sync', subtitle: 'Backup JSON koleksi', trailing: Icons.chevron_right_rounded, onTap: () => Navigator.push(context, smoothPageRoute(StorageModeScreen(store: store)))),
                 SettingsTile(icon: Icons.lock_rounded, title: 'App Lock', subtitle: 'Off', trailing: Icons.chevron_right_rounded),
-                SettingsTile(icon: Icons.info_rounded, title: 'About', subtitle: 'v2.0.5+35 V9.3 Reference Final Polish', trailing: Icons.chevron_right_rounded),
+                SettingsTile(icon: Icons.info_rounded, title: 'About', subtitle: 'v2.0.6+36 V9.4 Real Voice Player', trailing: Icons.chevron_right_rounded),
               ],
             );
           },
@@ -2921,7 +3274,7 @@ class _SdCardPathScreenState extends State<SdCardPathScreen> {
                 padding: const EdgeInsets.all(16),
                 borderColor: kPurple.withOpacity(0.35),
                 child: const Text(
-                  'V9.3: final reference polish, hero lebih compact, quick access lebih tipis, waveform lebih penuh, dan DCM Waifu tetap aktif.',
+                  'V9.4: tab Voice bisa scan dan putar audio lokal dari DCM Waifu/Voice dengan spectrum visualizer ringan.',
                   style: TextStyle(color: kTextSoft, height: 1.35),
                 ),
               ),
