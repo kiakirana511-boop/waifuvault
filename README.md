@@ -1,12 +1,20 @@
 # WaifuVault V9.2 Reference Polish
 
-UI polish lanjutan mengikuti referensi Hoshino Private Waifu Gallery: cosmic soft pink-blue, layout Home/Gallery/Voice/Profile, dan styling lebih dekat ke mockup referensi.
+UI polish mengikuti referensi Hoshino Private Waifu Gallery.
 
-## V9.2 Reference Polish
-- Versi dinaikkan ke 2.0.3+33.
-- Arah desain tetap: Hoshino / Private Waifu Gallery.
-- Target polish berikutnya: font title lebih elegan, hero card lebih compact, quick access lebih kecil, waveform Voice lebih premium, dan spacing Profile lebih rapat.
-- Fitur DCM Waifu scan/internal+SD tetap dipertahankan.
+Upgrade V9.2:
+- Judul Hoshino dibuat lebih elegan/serif.
+- Home hero card lebih compact, tidak terlalu penuh layar.
+- Quick Access dibuat lebih kecil dan rapi.
+- Voice page dipoles dengan waveform lebih panjang dan avatar lebih proporsional.
+- Profile spacing dibuat lebih tipis dan premium.
+- Badge/about dinaikkan ke V9.2.
+- Fitur lama tetap aman: DCM Waifu auto-scan, SD/internal public path, favorite, delete, preview.
 
-## Catatan
-Assets branding V5 boleh dibiarkan. Build tetap lewat GitHub Actions seperti biasa.
+Upload/replace ke GitHub:
+- pubspec.yaml
+- README.md
+- lib/main.dart
+- .github/workflows/build-apk.yml
+
+Assets branding V5 boleh dibiarkan.
