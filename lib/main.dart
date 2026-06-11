@@ -353,7 +353,7 @@ class VaultStore extends ChangeNotifier {
 
   Map<String, dynamic> backupPayload() => {
         'app': 'WaifuVault',
-        'version': '2.0.4 V9.2 Reference Polish',
+        'version': '2.0.5 V9.3 Reference Final Polish',
         'exportedAt': DateTime.now().toIso8601String(),
         'itemCount': _items.length,
         'items': _items.map((e) => e.toJson()).toList(),
@@ -769,7 +769,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   crossAxisCount: 2,
                   mainAxisSpacing: 10,
                   crossAxisSpacing: 10,
-                  childAspectRatio: 1.95,
+                  childAspectRatio: 2.45,
                   children: [
                     QuickAccessTile(icon: Icons.image_rounded, label: 'Gallery', color: kPink, onTap: () => DefaultTabController.maybeOf(context)),
                     QuickAccessTile(icon: Icons.graphic_eq_rounded, label: 'Voice', color: kBlue, onTap: () => showSnack(context, 'Buka tab Voice dari bawah.')),
@@ -836,7 +836,7 @@ class HomeWelcomeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 318,
+      height: 286,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(28),
         border: Border.all(color: Colors.white.withOpacity(0.16)),
@@ -880,11 +880,11 @@ class HomeWelcomeCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Welcome back,', style: TextStyle(color: Colors.white.withOpacity(.86), fontSize: 13)),
+                      Text('Welcome back,', style: TextStyle(color: Colors.white.withOpacity(.86), fontSize: 12)),
                       const SizedBox(height: 2),
                       const Row(
                         children: [
-                          Text('Sensei', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w500, color: Colors.white, letterSpacing: .5)),
+                          Text('Sensei', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w500, color: Colors.white, letterSpacing: .5)),
                           SizedBox(width: 8),
                           Icon(Icons.favorite_rounded, size: 18, color: kPink),
                         ],
@@ -933,13 +933,13 @@ class QuickAccessTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(22),
       onTap: onTap,
       child: GlassPanel(
-        padding: const EdgeInsets.all(10),
-        borderColor: color.withOpacity(.22),
+        padding: const EdgeInsets.all(8),
+        borderColor: color.withOpacity(.20),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: color, size: 24),
-            const SizedBox(height: 6),
+            Icon(icon, color: color, size: 22),
+            const SizedBox(height: 5),
             Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.white)),
           ],
         ),
@@ -1167,17 +1167,17 @@ class SmallVoiceChip extends StatelessWidget {
 class FakeWaveform extends StatelessWidget {
   const FakeWaveform({super.key});
   @override
-  Widget build(BuildContext context) => SizedBox(height: 88, child: CustomPaint(painter: WavePainter()));
+  Widget build(BuildContext context) => SizedBox(height: 96, child: CustomPaint(painter: WavePainter()));
 }
 
 class WavePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()..strokeCap = StrokeCap.round..strokeWidth = 3;
-    for (int i = 0; i < 54; i++) {
-      final x = i * (size.width / 53);
+    for (int i = 0; i < 64; i++) {
+      final x = i * (size.width / 63);
       final h = 12 + ((i * 17) % 35).toDouble();
-      paint.color = Color.lerp(kBlue, kPink, i / 53)!.withOpacity(.88);
+      paint.color = Color.lerp(kBlue, kPink, i / 63)!.withOpacity(.88);
       canvas.drawLine(Offset(x, size.height / 2 - h / 2), Offset(x, size.height / 2 + h / 2), paint);
     }
   }
@@ -1304,7 +1304,7 @@ class PremiumDashboard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(999),
                         border: Border.all(color: kPink.withOpacity(0.45)),
                       ),
-                      child: const Text('V9.2 POLISH UI', style: TextStyle(fontSize: 11, letterSpacing: 1.3, fontWeight: FontWeight.w900, color: Colors.white)),
+                      child: const Text('V9.3 FINAL UI', style: TextStyle(fontSize: 11, letterSpacing: 1.3, fontWeight: FontWeight.w900, color: Colors.white)),
                     ),
                     const SizedBox(height: 9),
                     Text(
@@ -1646,7 +1646,7 @@ class ProfileScreen extends StatelessWidget {
                 SettingsTile(icon: Icons.storage_rounded, title: 'Storage Mode', subtitle: 'Internal + SD DCM Waifu', trailing: Icons.chevron_right_rounded, onTap: () => Navigator.push(context, smoothPageRoute(StorageModeScreen(store: store)))),
                 SettingsTile(icon: Icons.cloud_upload_rounded, title: 'Backup & Sync', subtitle: 'Backup JSON koleksi', trailing: Icons.chevron_right_rounded, onTap: () => Navigator.push(context, smoothPageRoute(StorageModeScreen(store: store)))),
                 SettingsTile(icon: Icons.lock_rounded, title: 'App Lock', subtitle: 'Off', trailing: Icons.chevron_right_rounded),
-                SettingsTile(icon: Icons.info_rounded, title: 'About', subtitle: 'v2.0.4+34 V9.2 Reference Polish', trailing: Icons.chevron_right_rounded),
+                SettingsTile(icon: Icons.info_rounded, title: 'About', subtitle: 'v2.0.5+35 V9.3 Reference Final Polish', trailing: Icons.chevron_right_rounded),
               ],
             );
           },
@@ -2921,7 +2921,7 @@ class _SdCardPathScreenState extends State<SdCardPathScreen> {
                 padding: const EdgeInsets.all(16),
                 borderColor: kPurple.withOpacity(0.35),
                 child: const Text(
-                  'V9.2: reference polish, cosmic soft spacing, compact home cards, serif Hoshino title, dan storage public DCM Waifu tetap aktif.',
+                  'V9.3: final reference polish, hero lebih compact, quick access lebih tipis, waveform lebih penuh, dan DCM Waifu tetap aktif.',
                   style: TextStyle(color: kTextSoft, height: 1.35),
                 ),
               ),
