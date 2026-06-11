@@ -353,7 +353,7 @@ class VaultStore extends ChangeNotifier {
 
   Map<String, dynamic> backupPayload() => {
         'app': 'WaifuVault',
-        'version': '1.9.0 V9 Hoshino Cosmic UI',
+        'version': '2.0.4 V9.2 Reference Polish',
         'exportedAt': DateTime.now().toIso8601String(),
         'itemCount': _items.length,
         'items': _items.map((e) => e.toJson()).toList(),
@@ -769,7 +769,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   crossAxisCount: 2,
                   mainAxisSpacing: 10,
                   crossAxisSpacing: 10,
-                  childAspectRatio: 1.45,
+                  childAspectRatio: 1.95,
                   children: [
                     QuickAccessTile(icon: Icons.image_rounded, label: 'Gallery', color: kPink, onTap: () => DefaultTabController.maybeOf(context)),
                     QuickAccessTile(icon: Icons.graphic_eq_rounded, label: 'Voice', color: kBlue, onTap: () => showSnack(context, 'Buka tab Voice dari bawah.')),
@@ -804,7 +804,7 @@ class CosmicHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 92,
+      height: 88,
       child: Stack(
         alignment: Alignment.center,
         children: [
@@ -814,9 +814,9 @@ class CosmicHeader extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                GradientText(title, style: const TextStyle(fontSize: 48, fontWeight: FontWeight.w500, letterSpacing: 1.2)),
+                GradientText(title, style: const TextStyle(fontSize: 50, fontWeight: FontWeight.w400, letterSpacing: 1.6, fontFamily: 'serif')),
                 const SizedBox(height: 4),
-                Text(subtitle, style: const TextStyle(color: kCosmicGold, fontSize: 12, letterSpacing: 2.8, fontWeight: FontWeight.w600)),
+                Text(subtitle, style: const TextStyle(color: kCosmicGold, fontSize: 12, letterSpacing: 3.1, fontWeight: FontWeight.w600)),
               ],
             ),
           ),
@@ -836,11 +836,11 @@ class HomeWelcomeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 390,
+      height: 318,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(32),
+        borderRadius: BorderRadius.circular(28),
         border: Border.all(color: Colors.white.withOpacity(0.16)),
-        boxShadow: const [BoxShadow(color: Color(0x44779BFF), blurRadius: 32, offset: Offset(0, 18))],
+        boxShadow: const [BoxShadow(color: Color(0x33779BFF), blurRadius: 26, offset: Offset(0, 14))],
       ),
       clipBehavior: Clip.antiAlias,
       child: Stack(
@@ -880,17 +880,17 @@ class HomeWelcomeCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Welcome back,', style: TextStyle(color: Colors.white.withOpacity(.86), fontSize: 14)),
+                      Text('Welcome back,', style: TextStyle(color: Colors.white.withOpacity(.86), fontSize: 13)),
                       const SizedBox(height: 2),
                       const Row(
                         children: [
-                          Text('Sensei', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w500, color: Colors.white, letterSpacing: .5)),
+                          Text('Sensei', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w500, color: Colors.white, letterSpacing: .5)),
                           SizedBox(width: 8),
                           Icon(Icons.favorite_rounded, size: 18, color: kPink),
                         ],
                       ),
                       const SizedBox(height: 2),
-                      Text('Hoshino is happy to see you again.', style: TextStyle(color: Colors.white.withOpacity(.70), fontSize: 13)),
+                      Text('Hoshino is happy to see you again.', style: TextStyle(color: Colors.white.withOpacity(.70), fontSize: 12)),
                     ],
                   ),
                 ),
@@ -908,7 +908,7 @@ class HomeWelcomeCard extends StatelessWidget {
                 Text(latest == null ? 'Good evening, Sensei.' : displayMediaTitle(latest!),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 22, color: Colors.white, fontWeight: FontWeight.w800)),
+                    style: const TextStyle(fontSize: 20, color: Colors.white, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 4),
                 Text('${store.items.length} saved moments • ${store.favoriteCount} favorites', style: TextStyle(color: Colors.white.withOpacity(.72))),
               ],
@@ -933,14 +933,14 @@ class QuickAccessTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(22),
       onTap: onTap,
       child: GlassPanel(
-        padding: const EdgeInsets.all(12),
-        borderColor: color.withOpacity(.28),
+        padding: const EdgeInsets.all(10),
+        borderColor: color.withOpacity(.22),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: color, size: 30),
-            const SizedBox(height: 8),
-            Text(label, style: const TextStyle(fontWeight: FontWeight.w800, color: Colors.white)),
+            Icon(icon, color: color, size: 24),
+            const SizedBox(height: 6),
+            Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.white)),
           ],
         ),
       ),
@@ -1095,20 +1095,20 @@ class VoiceScreen extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(18, 18, 18, 110),
           children: [
-            const Center(child: Text('Voice', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w500, color: Colors.white, letterSpacing: .6))),
+            const Center(child: Text('Voice', style: TextStyle(fontSize: 31, fontWeight: FontWeight.w400, color: Colors.white, letterSpacing: .8, fontFamily: 'serif'))),
             const SizedBox(height: 20),
             Center(
               child: Stack(
                 alignment: Alignment.bottomRight,
                 children: [
                   Container(
-                    width: 170,
-                    height: 170,
+                    width: 138,
+                    height: 138,
                     decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: kBlue.withOpacity(.55), width: 2), boxShadow: const [BoxShadow(color: Color(0x6689B8FF), blurRadius: 38)]),
                     clipBehavior: Clip.antiAlias,
                     child: avatar != null ? Image.file(avatar, fit: BoxFit.cover) : const DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(colors: [kPink, kBlue])), child: Icon(Icons.graphic_eq_rounded, size: 68)),
                   ),
-                  Container(width: 52, height: 52, decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [kPink, kBlue])), child: const Icon(Icons.favorite_rounded, color: Colors.white)),
+                  Container(width: 46, height: 46, decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [kPink, kBlue])), child: const Icon(Icons.favorite_rounded, color: Colors.white)),
                 ],
               ),
             ),
@@ -1167,17 +1167,17 @@ class SmallVoiceChip extends StatelessWidget {
 class FakeWaveform extends StatelessWidget {
   const FakeWaveform({super.key});
   @override
-  Widget build(BuildContext context) => SizedBox(height: 74, child: CustomPaint(painter: WavePainter()));
+  Widget build(BuildContext context) => SizedBox(height: 88, child: CustomPaint(painter: WavePainter()));
 }
 
 class WavePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()..strokeCap = StrokeCap.round..strokeWidth = 3;
-    for (int i = 0; i < 36; i++) {
-      final x = i * (size.width / 35);
+    for (int i = 0; i < 54; i++) {
+      final x = i * (size.width / 53);
       final h = 12 + ((i * 17) % 35).toDouble();
-      paint.color = Color.lerp(kBlue, kPink, i / 35)!.withOpacity(.9);
+      paint.color = Color.lerp(kBlue, kPink, i / 53)!.withOpacity(.88);
       canvas.drawLine(Offset(x, size.height / 2 - h / 2), Offset(x, size.height / 2 + h / 2), paint);
     }
   }
@@ -1304,7 +1304,7 @@ class PremiumDashboard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(999),
                         border: Border.all(color: kPink.withOpacity(0.45)),
                       ),
-                      child: const Text('V9.1 REFERENCE UI', style: TextStyle(fontSize: 11, letterSpacing: 1.3, fontWeight: FontWeight.w900, color: Colors.white)),
+                      child: const Text('V9.2 POLISH UI', style: TextStyle(fontSize: 11, letterSpacing: 1.3, fontWeight: FontWeight.w900, color: Colors.white)),
                     ),
                     const SizedBox(height: 9),
                     Text(
@@ -1577,15 +1577,15 @@ class ProfileScreen extends StatelessWidget {
             return ListView(
               padding: const EdgeInsets.fromLTRB(18, 18, 18, 110),
               children: [
-                const Center(child: Text('Profile', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w500, color: Colors.white, letterSpacing: .6))),
+                const Center(child: Text('Profile', style: TextStyle(fontSize: 31, fontWeight: FontWeight.w400, color: Colors.white, letterSpacing: .8, fontFamily: 'serif'))),
                 const SizedBox(height: 18),
                 GlassPanel(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(14),
                   child: Row(
                     children: [
                       Container(
-                        width: 124,
-                        height: 124,
+                        width: 110,
+                        height: 110,
                         decoration: BoxDecoration(borderRadius: BorderRadius.circular(22), border: Border.all(color: kPink.withOpacity(.35))),
                         clipBehavior: Clip.antiAlias,
                         child: avatar != null ? Image.file(avatar, fit: BoxFit.cover) : const DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(colors: [kPink, kBlue])), child: Icon(Icons.favorite_rounded, size: 48)),
@@ -1595,7 +1595,7 @@ class ProfileScreen extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: const [
-                            Text('Hoshino ✦', style: TextStyle(fontSize: 25, fontWeight: FontWeight.w600, color: Colors.white)),
+                            Text('Hoshino ✦', style: TextStyle(fontSize: 23, fontWeight: FontWeight.w500, color: Colors.white, fontFamily: 'serif')),
                             SizedBox(height: 5),
                             Text('Your devoted companion', style: TextStyle(color: kTextSoft)),
                             SizedBox(height: 12),
@@ -1612,7 +1612,7 @@ class ProfileScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 14),
                 GlassPanel(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(14),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -1646,7 +1646,7 @@ class ProfileScreen extends StatelessWidget {
                 SettingsTile(icon: Icons.storage_rounded, title: 'Storage Mode', subtitle: 'Internal + SD DCM Waifu', trailing: Icons.chevron_right_rounded, onTap: () => Navigator.push(context, smoothPageRoute(StorageModeScreen(store: store)))),
                 SettingsTile(icon: Icons.cloud_upload_rounded, title: 'Backup & Sync', subtitle: 'Backup JSON koleksi', trailing: Icons.chevron_right_rounded, onTap: () => Navigator.push(context, smoothPageRoute(StorageModeScreen(store: store)))),
                 SettingsTile(icon: Icons.lock_rounded, title: 'App Lock', subtitle: 'Off', trailing: Icons.chevron_right_rounded),
-                SettingsTile(icon: Icons.info_rounded, title: 'About', subtitle: 'v2.0.0+30 V9.1 Full Reference UI', trailing: Icons.chevron_right_rounded),
+                SettingsTile(icon: Icons.info_rounded, title: 'About', subtitle: 'v2.0.4+34 V9.2 Reference Polish', trailing: Icons.chevron_right_rounded),
               ],
             );
           },
@@ -2768,7 +2768,7 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
                 const SizedBox(height: 12),
                 GlassPanel(
                   margin: const EdgeInsets.fromLTRB(18, 0, 18, 22),
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(14),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -2921,7 +2921,7 @@ class _SdCardPathScreenState extends State<SdCardPathScreen> {
                 padding: const EdgeInsets.all(16),
                 borderColor: kPurple.withOpacity(0.35),
                 child: const Text(
-                  'V9: tampilan diubah ke gaya Hoshino cosmic gallery, tetap pakai storage public DCM Waifu dan auto-scan.',
+                  'V9.2: reference polish, cosmic soft spacing, compact home cards, serif Hoshino title, dan storage public DCM Waifu tetap aktif.',
                   style: TextStyle(color: kTextSoft, height: 1.35),
                 ),
               ),
