@@ -359,7 +359,7 @@ class VaultStore extends ChangeNotifier {
 
   Map<String, dynamic> backupPayload() => {
         'app': 'WaifuVault',
-        'version': '2.0.7 V9.4.1 Voice Performance Patch',
+        'version': '2.0.6 V9.4.3 Voice Performance Fix',
         'exportedAt': DateTime.now().toIso8601String(),
         'itemCount': _items.length,
         'items': _items.map((e) => e.toJson()).toList(),
@@ -1164,9 +1164,18 @@ class VoiceScreen extends StatefulWidget {
 }
 
 class _VoiceScreenState extends State<VoiceScreen> {
+  static const int _spectrumBarCount = 52;
+  static const Duration _spectrumFrameInterval = Duration(milliseconds: 110); // ~9 FPS for low-end 60Hz phones.
+  static const Duration _progressFrameInterval = Duration(milliseconds: 320); // ~3 FPS, enough for audio progress UI.
+
   final AudioPlayer _player = AudioPlayer();
   final List<VoiceTrack> _tracks = [];
-  final List<double> _spectrum = List<double>.filled(52, .28);
+  final List<double> _spectrum = List<double>.filled(_spectrumBarCount, .28);
+  late final List<double> _barZones;
+  late final List<double> _barIdleSeed;
+  late final ValueNotifier<List<double>> _spectrumNotifier;
+  final ValueNotifier<_VoiceProgress> _progressNotifier = ValueNotifier<_VoiceProgress>(const _VoiceProgress());
+  final ValueNotifier<bool> _playingNotifier = ValueNotifier<bool>(false);
 
   StreamSubscription<Duration>? _durationSub;
   StreamSubscription<Duration>? _positionSub;
@@ -1181,40 +1190,40 @@ class _VoiceScreenState extends State<VoiceScreen> {
   int _tick = 0;
   Duration _duration = Duration.zero;
   Duration _position = Duration.zero;
+  int _spectrumHash = 17;
+  bool _scanInProgress = false;
 
   VoiceTrack? get _current => _tracks.isEmpty ? null : _tracks[_index.clamp(0, _tracks.length - 1).toInt()];
 
   @override
   void initState() {
     super.initState();
+    _barZones = List<double>.generate(_spectrumBarCount, (i) => i / math.max(1, _spectrumBarCount - 1));
+    _barIdleSeed = List<double>.generate(_spectrumBarCount, (i) => .22 + (math.sin(i * .73) * .5 + .5) * .38);
+    _spectrumNotifier = ValueNotifier<List<double>>(List<double>.unmodifiable(_spectrum));
     _durationSub = _player.onDurationChanged.listen((duration) {
       if (!mounted) return;
-      setState(() => _duration = duration);
+      _duration = duration;
+      _publishProgress(force: true);
     });
     _positionSub = _player.onPositionChanged.listen((position) {
       if (!mounted) return;
-      final now = DateTime.now().millisecondsSinceEpoch;
-      // V9.4.1: throttle update progress biar tidak rebuild full Voice page terlalu sering.
-      if (now - _lastPositionUiMs < 260 && position < _duration) {
-        _position = position;
-        return;
-      }
-      _lastPositionUiMs = now;
-      setState(() => _position = position);
+      _position = position;
+      _publishProgress();
     });
     _stateSub = _player.onPlayerStateChanged.listen((state) {
       if (!mounted) return;
-      setState(() => _playing = state == PlayerState.playing);
+      final playing = state == PlayerState.playing;
+      if (_playing == playing) return;
+      _playing = playing;
+      _playingNotifier.value = playing;
+      if (!playing) _updateSpectrum(forceIdle: true, publish: true);
     });
     _completeSub = _player.onPlayerComplete.listen((_) => _next());
-    _spectrumTimer = Timer.periodic(const Duration(milliseconds: 145), (_) {
-      if (!mounted) return;
-      if (_playing) {
-        setState(() {
-          _tick++;
-          _updateSpectrum();
-        });
-      }
+    _spectrumTimer = Timer.periodic(_spectrumFrameInterval, (_) {
+      if (!mounted || !_playing) return;
+      _tick++;
+      _updateSpectrum(publish: true);
     });
     _scanTracks();
   }
@@ -1226,13 +1235,19 @@ class _VoiceScreenState extends State<VoiceScreen> {
     _positionSub?.cancel();
     _stateSub?.cancel();
     _completeSub?.cancel();
+    _spectrumNotifier.dispose();
+    _progressNotifier.dispose();
+    _playingNotifier.dispose();
     _player.dispose();
     super.dispose();
   }
 
   Future<void> _scanTracks() async {
-    setState(() => _loading = true);
+    if (_scanInProgress) return;
+    _scanInProgress = true;
+    if (mounted) setState(() => _loading = true);
     final result = await scanVoiceTracks();
+    _scanInProgress = false;
     if (!mounted) return;
     setState(() {
       _tracks
@@ -1240,30 +1255,45 @@ class _VoiceScreenState extends State<VoiceScreen> {
         ..addAll(result);
       if (_index >= _tracks.length) _index = 0;
       _loading = false;
-      _updateSpectrum(forceIdle: true);
+      _refreshSpectrumSeed();
+      _updateSpectrum(forceIdle: true, publish: true);
     });
   }
 
-  void _updateSpectrum({bool forceIdle = false}) {
-    final trackHash = (_current?.path.hashCode ?? 17).abs();
+  void _publishProgress({bool force = false}) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (!force && now - _lastPositionUiMs < _progressFrameInterval.inMilliseconds && _position < _duration) return;
+    _lastPositionUiMs = now;
+    _progressNotifier.value = _VoiceProgress(position: _position, duration: _duration);
+  }
+
+  void _refreshSpectrumSeed() {
+    _spectrumHash = (_current?.path.hashCode ?? 17).abs();
+  }
+
+  void _updateSpectrum({bool forceIdle = false, bool publish = false}) {
     final t = forceIdle ? 0.0 : (_position.inMilliseconds / 1000.0) + (_tick * .035);
+    final bassSpeed = 2.0 + (_spectrumHash % 7) * .03;
+    final midSpeed = 4.4 + (_spectrumHash % 11) * .02;
+    final highSpeed = 7.6 + (_spectrumHash % 13) * .02;
     for (int i = 0; i < _spectrum.length; i++) {
-      final zone = i / math.max(1, _spectrum.length - 1);
-      final bass = math.sin(t * (2.0 + (trackHash % 7) * .03) + i * .42) * .5 + .5;
-      final mid = math.sin(t * (4.4 + (trackHash % 11) * .02) + i * .88 + 1.2) * .5 + .5;
-      final high = math.sin(t * (7.6 + (trackHash % 13) * .02) + i * 1.37 + 2.4) * .5 + .5;
-      final pulse = math.sin(t * 1.35 + zone * math.pi * 2) * .5 + .5;
-      double value;
-      if (i < _spectrum.length * .28) {
-        value = bass * .72 + pulse * .28;
-      } else if (i < _spectrum.length * .72) {
-        value = mid * .68 + bass * .18 + pulse * .14;
-      } else {
-        value = high * .62 + mid * .26 + pulse * .12;
+      final zone = _barZones[i];
+      if (forceIdle) {
+        _spectrum[i] = _barIdleSeed[i];
+        continue;
       }
-      if (!_playing && !forceIdle) value *= .42;
+      final bass = math.sin(t * bassSpeed + i * .42) * .5 + .5;
+      final mid = math.sin(t * midSpeed + i * .88 + 1.2) * .5 + .5;
+      final high = math.sin(t * highSpeed + i * 1.37 + 2.4) * .5 + .5;
+      final pulse = math.sin(t * 1.35 + zone * math.pi * 2) * .5 + .5;
+      final value = i < _spectrum.length * .28
+          ? bass * .72 + pulse * .28
+          : i < _spectrum.length * .72
+              ? mid * .68 + bass * .18 + pulse * .14
+              : high * .62 + mid * .26 + pulse * .12;
       _spectrum[i] = (.18 + value * .82).clamp(.14, 1.0).toDouble();
     }
+    if (publish) _spectrumNotifier.value = List<double>.unmodifiable(_spectrum);
   }
 
   Future<void> _playIndex(int index) async {
@@ -1278,8 +1308,10 @@ class _VoiceScreenState extends State<VoiceScreen> {
         _index = safeIndex;
         _position = Duration.zero;
         _duration = Duration.zero;
-        _updateSpectrum(forceIdle: true);
+        _refreshSpectrumSeed();
+        _updateSpectrum(forceIdle: true, publish: true);
       });
+      _publishProgress(force: true);
       await _player.stop();
       await _player.play(DeviceFileSource(track.path));
     } catch (_) {
@@ -1324,6 +1356,8 @@ class _VoiceScreenState extends State<VoiceScreen> {
   Future<void> _seek(double value) async {
     if (_duration == Duration.zero) return;
     final target = Duration(milliseconds: value.round());
+    _position = target;
+    _publishProgress(force: true);
     await _player.seek(target);
   }
 
@@ -1332,8 +1366,6 @@ class _VoiceScreenState extends State<VoiceScreen> {
     final latest = widget.store.items.isNotEmpty ? widget.store.items.first : null;
     final avatar = mediaPreviewFile(latest);
     final current = _current;
-    final progressMax = math.max(1, _duration.inMilliseconds).toDouble();
-    final progress = _position.inMilliseconds.clamp(0, math.max(1, _duration.inMilliseconds)).toDouble();
 
     return NeonBackground(
       child: SafeArea(
@@ -1353,7 +1385,10 @@ class _VoiceScreenState extends State<VoiceScreen> {
                     clipBehavior: Clip.antiAlias,
                     child: avatar != null ? Image.file(avatar, fit: BoxFit.cover) : const DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(colors: [kPink, kBlue])), child: Icon(Icons.graphic_eq_rounded, size: 68)),
                   ),
-                  Container(width: 44, height: 44, decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [kPink, kBlue])), child: Icon(_playing ? Icons.graphic_eq_rounded : Icons.favorite_rounded, color: Colors.white)),
+                  ValueListenableBuilder<bool>(
+                    valueListenable: _playingNotifier,
+                    builder: (context, playing, _) => Container(width: 44, height: 44, decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [kPink, kBlue])), child: Icon(playing ? Icons.graphic_eq_rounded : Icons.favorite_rounded, color: Colors.white)),
+                  ),
                 ],
               ),
             ),
@@ -1385,28 +1420,40 @@ class _VoiceScreenState extends State<VoiceScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  RepaintBoundary(child: SpectrumVisualizer(values: _spectrum, playing: _playing)),
+                  RepaintBoundary(child: SpectrumVisualizer(values: _spectrumNotifier, playing: _playingNotifier)),
                   const SizedBox(height: 10),
-                  SliderTheme(
-                    data: SliderTheme.of(context).copyWith(trackHeight: 3, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5)),
-                    child: Slider(
-                      min: 0,
-                      max: progressMax,
-                      value: progress.clamp(0, progressMax).toDouble(),
-                      activeColor: kPink,
-                      inactiveColor: Colors.white.withOpacity(.12),
-                      onChanged: _duration == Duration.zero ? null : _seek,
-                    ),
+                  ValueListenableBuilder<_VoiceProgress>(
+                    valueListenable: _progressNotifier,
+                    builder: (context, progressState, _) {
+                      final progressMax = math.max(1, progressState.duration.inMilliseconds).toDouble();
+                      final progress = progressState.position.inMilliseconds.clamp(0, math.max(1, progressState.duration.inMilliseconds)).toDouble();
+                      return Column(children: [
+                        SliderTheme(
+                          data: SliderTheme.of(context).copyWith(trackHeight: 3, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5)),
+                          child: Slider(
+                            min: 0,
+                            max: progressMax,
+                            value: progress.clamp(0, progressMax).toDouble(),
+                            activeColor: kPink,
+                            inactiveColor: Colors.white.withOpacity(.12),
+                            onChanged: progressState.duration == Duration.zero ? null : _seek,
+                          ),
+                        ),
+                        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                          Text(formatVoiceDuration(progressState.position), style: const TextStyle(color: kTextSoft, fontSize: 11)),
+                          Text(formatVoiceDuration(progressState.duration), style: const TextStyle(color: kTextSoft, fontSize: 11)),
+                        ]),
+                      ]);
+                    },
                   ),
-                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                    Text(formatVoiceDuration(_position), style: const TextStyle(color: kTextSoft, fontSize: 11)),
-                    Text(formatVoiceDuration(_duration), style: const TextStyle(color: kTextSoft, fontSize: 11)),
-                  ]),
                   const SizedBox(height: 10),
                   Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                     IconButton(onPressed: _previous, icon: const Icon(Icons.skip_previous_rounded, size: 36, color: Colors.white)),
                     const SizedBox(width: 18),
-                    AudioCircleButton(playing: _playing, onTap: _togglePlay),
+                    ValueListenableBuilder<bool>(
+                      valueListenable: _playingNotifier,
+                      builder: (context, playing, _) => AudioCircleButton(playing: playing, onTap: _togglePlay),
+                    ),
                     const SizedBox(width: 18),
                     IconButton(onPressed: _next, icon: const Icon(Icons.skip_next_rounded, size: 36, color: Colors.white)),
                   ]),
@@ -1428,12 +1475,15 @@ class _VoiceScreenState extends State<VoiceScreen> {
             else
               ...List.generate(_tracks.length, (i) {
                 final track = _tracks[i];
-                return VoiceLineTile(
-                  text: track.title,
-                  time: track.source,
-                  active: i == _index,
-                  playing: i == _index && _playing,
-                  onTap: () => _playIndex(i),
+                return ValueListenableBuilder<bool>(
+                  valueListenable: _playingNotifier,
+                  builder: (context, playing, _) => VoiceLineTile(
+                    text: track.title,
+                    time: track.source,
+                    active: i == _index,
+                    playing: i == _index && playing,
+                    onTap: () => _playIndex(i),
+                  ),
                 );
               }),
           ],
@@ -1441,6 +1491,13 @@ class _VoiceScreenState extends State<VoiceScreen> {
       ),
     );
   }
+}
+
+class _VoiceProgress {
+  final Duration position;
+  final Duration duration;
+
+  const _VoiceProgress({this.position = Duration.zero, this.duration = Duration.zero});
 }
 
 class SmallVoiceChip extends StatelessWidget {
@@ -1457,19 +1514,25 @@ class SmallVoiceChip extends StatelessWidget {
 }
 
 class SpectrumVisualizer extends StatelessWidget {
-  final List<double> values;
-  final bool playing;
+  final ValueListenable<List<double>> values;
+  final ValueListenable<bool> playing;
   const SpectrumVisualizer({super.key, required this.values, required this.playing});
 
   @override
   Widget build(BuildContext context) {
-    // V9.4.1: tampilannya tetap waveform bar pink-biru, tapi render pakai satu CustomPaint.
-    // Ini jauh lebih ringan daripada 52 AnimatedContainer + shadow setiap frame.
+    // V9.4.3: tampilan waveform bar pink-biru tetap sama, tapi repaint dibatasi ke area CustomPaint.
+    // Timer spectrum hanya publish sekitar 9 FPS dan tidak memicu rebuild halaman Voice penuh.
     return SizedBox(
       height: 98,
       width: double.infinity,
-      child: CustomPaint(
-        painter: SpectrumBarPainter(values: values, playing: playing),
+      child: ValueListenableBuilder<List<double>>(
+        valueListenable: values,
+        builder: (context, bars, _) => ValueListenableBuilder<bool>(
+          valueListenable: playing,
+          builder: (context, isPlaying, _) => CustomPaint(
+            painter: SpectrumBarPainter(values: bars, playing: isPlaying),
+          ),
+        ),
       ),
     );
   }
@@ -1490,13 +1553,13 @@ class SpectrumBarPainter extends CustomPainter {
     final totalWidth = count * barWidth + (count - 1) * gap;
     var x = (size.width - totalWidth) / 2;
     final centerY = size.height / 2;
+    final opacity = playing ? .94 : .52;
     final paint = Paint()..style = PaintingStyle.fill;
 
     for (int i = 0; i < count; i++) {
       final value = values[i].clamp(.12, 1.0).toDouble();
       final height = 14 + value * 76;
-      final color = Color.lerp(kBlue, kPink, i / math.max(1, count - 1))!.withOpacity(playing ? .94 : .52);
-      paint.color = color;
+      paint.color = Color.lerp(kBlue, kPink, i / math.max(1, count - 1))!.withOpacity(opacity);
       final rect = Rect.fromLTWH(x, centerY - height / 2, barWidth, height);
       canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(99)), paint);
       x += barWidth + gap;
@@ -1507,15 +1570,20 @@ class SpectrumBarPainter extends CustomPainter {
   bool shouldRepaint(covariant SpectrumBarPainter oldDelegate) {
     if (oldDelegate.playing != playing) return true;
     if (oldDelegate.values.length != values.length) return true;
-    if (!playing) return false;
-    return true;
+    for (var i = 0; i < values.length; i++) {
+      if (oldDelegate.values[i] != values[i]) return true;
+    }
+    return false;
   }
 }
 
 class FakeWaveform extends StatelessWidget {
+  static final ValueNotifier<List<double>> _values = ValueNotifier<List<double>>(const [.2, .5, .8, .35, .7, .4, .9, .3, .62, .45, .75, .28]);
+  static final ValueNotifier<bool> _playing = ValueNotifier<bool>(false);
+
   const FakeWaveform({super.key});
   @override
-  Widget build(BuildContext context) => const SpectrumVisualizer(values: [.2, .5, .8, .35, .7, .4, .9, .3, .62, .45, .75, .28], playing: false);
+  Widget build(BuildContext context) => SpectrumVisualizer(values: _values, playing: _playing);
 }
 
 class WavePainter extends CustomPainter {
@@ -2021,7 +2089,7 @@ class ProfileScreen extends StatelessWidget {
                 SettingsTile(icon: Icons.storage_rounded, title: 'Storage Mode', subtitle: 'Internal + SD DCM Waifu', trailing: Icons.chevron_right_rounded, onTap: () => Navigator.push(context, smoothPageRoute(StorageModeScreen(store: store)))),
                 SettingsTile(icon: Icons.cloud_upload_rounded, title: 'Backup & Sync', subtitle: 'Backup JSON koleksi', trailing: Icons.chevron_right_rounded, onTap: () => Navigator.push(context, smoothPageRoute(StorageModeScreen(store: store)))),
                 SettingsTile(icon: Icons.lock_rounded, title: 'App Lock', subtitle: 'Off', trailing: Icons.chevron_right_rounded),
-                SettingsTile(icon: Icons.info_rounded, title: 'About', subtitle: 'v2.0.7+37 V9.4.1 Voice Performance Patch', trailing: Icons.chevron_right_rounded),
+                SettingsTile(icon: Icons.info_rounded, title: 'About', subtitle: 'v2.0.6+36 V9.4.3 Voice Performance Fix', trailing: Icons.chevron_right_rounded),
               ],
             );
           },
@@ -3296,7 +3364,7 @@ class _SdCardPathScreenState extends State<SdCardPathScreen> {
                 padding: const EdgeInsets.all(16),
                 borderColor: kPurple.withOpacity(0.35),
                 child: const Text(
-                  'V9.4.1: voice player tetap sama, spectrum dibuat lebih ringan supaya FPS lebih stabil.',
+                  'V9.4.3: voice player tetap sama, spectrum/progress dibuat lebih ringan supaya FPS lebih stabil.',
                   style: TextStyle(color: kTextSoft, height: 1.35),
                 ),
               ),
